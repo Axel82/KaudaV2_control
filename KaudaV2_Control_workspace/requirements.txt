@@ -1,0 +1,10 @@
+pyserial
+numpy
+pyqt5
+pyqtgraph
+
+# Development / tooling
+pytest
+flake8
+black
+isort

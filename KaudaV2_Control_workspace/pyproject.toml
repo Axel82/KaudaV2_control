@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kaudav2-control"
+version = "0.0.0"
+description = "Control utilities for KaudaV2 hardware."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [ { name = "Axel Habeillon" } ]
+dependencies = [
+  "pyserial",
+  "numpy",
+  "pyqt5",
+  "pyqtgraph",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
