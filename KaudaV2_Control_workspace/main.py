@@ -21,7 +21,7 @@ import serial.tools.list_ports
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel,
-    QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QCheckBox
+    QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QCheckBox, QTabWidget
 )
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 import pyqtgraph.opengl as gl
@@ -191,22 +191,35 @@ class KAudaApp(QWidget):
     # UI construction
     # -----------------------
     def _build_ui(self):
-        layout = QHBoxLayout(self)
+        # Main layout is vertical: Top (Tabs + 3D) / Bottom (Console)
+        main_layout = QVBoxLayout(self)
 
-        left = QVBoxLayout()
-        right = QVBoxLayout()
+        # Top section: Horizontal split between Tabs (Left) and 3D View (Right)
+        top_layout = QHBoxLayout()
+        
+        # Left: Vertical Tabs
+        self.tabs = QTabWidget()
+        self.tabs.setTabPosition(QTabWidget.West)  # Vertical tabs on the left
+        self.tabs.setFixedWidth(400) # Give some fixed width to the controls area
 
-        # console
-        left.addWidget(QLabel("Console Logs:"))
-        self.console = QTextEdit()
-        self.console.setReadOnly(True)
-        left.addWidget(self.console)
+        # Create Tab Widgets
+        tab_conn = QWidget()
+        tab_cart = QWidget()
+        tab_joint = QWidget()
+        tab_tools = QWidget()
 
-        # COM group
+        self.tabs.addTab(tab_conn, "Connexion")
+        self.tabs.addTab(tab_cart, "Cartésien")
+        self.tabs.addTab(tab_joint, "Articulaire")
+        self.tabs.addTab(tab_tools, "Outils")
+
+        # --- Tab 1: Connexion ---
+        layout_conn = QVBoxLayout()
+        
         gb_ports = QGroupBox("Ports / Connexion")
         gbp_layout = QHBoxLayout()
         self.combo_com = QComboBox()
-        self.refresh_ports()
+        #self.refresh_ports()
         btn_refresh = QPushButton("Refresh")
         btn_refresh.clicked.connect(self.refresh_ports)
         btn_connect = QPushButton("Connect")
@@ -215,7 +228,17 @@ class KAudaApp(QWidget):
         gbp_layout.addWidget(btn_refresh)
         gbp_layout.addWidget(btn_connect)
         gb_ports.setLayout(gbp_layout)
-        left.addWidget(gb_ports)
+        layout_conn.addWidget(gb_ports)
+
+        btn_teach = QPushButton("Teach Origin")
+        btn_teach.clicked.connect(self.on_teach_origin)
+        layout_conn.addWidget(btn_teach)
+        
+        layout_conn.addStretch() # Push items to top
+        tab_conn.setLayout(layout_conn)
+
+        # --- Tab 2: Cartésien ---
+        layout_cart = QVBoxLayout()
 
         # sliders
         gb_sliders = QGroupBox("Positions et limites")
@@ -242,7 +265,7 @@ class KAudaApp(QWidget):
         grid.addWidget(self.slider_tool, 4, 1)
 
         gb_sliders.setLayout(grid)
-        left.addWidget(gb_sliders)
+        layout_cart.addWidget(gb_sliders)
 
         # jog buttons
         gb_jog = QGroupBox("Move Jog (1 unité)")
@@ -257,9 +280,18 @@ class KAudaApp(QWidget):
             jog_layout.addWidget(btn_minus, i, 0)
             jog_layout.addWidget(btn_plus, i, 1)
         gb_jog.setLayout(jog_layout)
-        left.addWidget(gb_jog)
+        layout_cart.addWidget(gb_jog)
 
-        # ---------- Ajout : sliders pour positions angulaires + GOTO / GOHOME ----------
+        btn_send = QPushButton("Envoyer Position")
+        btn_send.clicked.connect(self.on_send_position)
+        layout_cart.addWidget(btn_send)
+
+        layout_cart.addStretch()
+        tab_cart.setLayout(layout_cart)
+
+        # --- Tab 3: Articulaire ---
+        layout_joint = QVBoxLayout()
+        
         # Constants for joint slider ranges (deg) -- Mise à jour selon les specs KAuda
         J1_MIN, J1_MAX = -165, 165   # base
         J2_MIN, J2_MAX = -100, 120   # shoulder
@@ -267,8 +299,6 @@ class KAudaApp(QWidget):
         J4_MIN, J4_MAX = -175, 175   # wrist
         J5_MIN, J5_MAX = -30, 130    # gripper rotation
 
-        # Insert inside KAudaApp._build_ui (or in place of the previous slider section)
-        # Create a group box for Joint Angles
         gb_joints = QGroupBox("Joint Angles (deg) - pour GOTO")
         grid_j = QGridLayout()
 
@@ -313,27 +343,25 @@ class KAudaApp(QWidget):
         grid_j.addWidget(self.slider_j5, 4, 1)
 
         gb_joints.setLayout(grid_j)
-        left.addWidget(gb_joints)
+        layout_joint.addWidget(gb_joints)
 
         # Connect joint sliders to preview update (so moving them previews the angular pose)
         for s in [self.slider_j1, self.slider_j2, self.slider_j3, self.slider_j4, self.slider_j5]:
             s.valueChanged.connect(self.on_angular_joint_slider_changed)
 
-        # commands
-        btn_send = QPushButton("Envoyer Position")
-        btn_send.clicked.connect(self.on_send_position)
-        btn_teach = QPushButton("Teach Origin")
-        btn_teach.clicked.connect(self.on_teach_origin)
         btn_goto = QPushButton("GOTO")
         btn_goto.clicked.connect(self.on_goto_clicked)
         btn_gohome = QPushButton("GOHOME")
         btn_gohome.clicked.connect(self.on_gohome_clicked)
 
-        left.addWidget(btn_teach)
-        left.addWidget(btn_goto)
-        left.addWidget(btn_gohome)
-        left.addWidget(btn_send)
+        layout_joint.addWidget(btn_goto)
+        layout_joint.addWidget(btn_gohome)
+        layout_joint.addStretch()
+        tab_joint.setLayout(layout_joint)
 
+        # --- Tab 4: Outils ---
+        layout_tools = QVBoxLayout()
+        
         # Gripper commands
         gb_gripper = QGroupBox("Gripper")
         grip_layout = QHBoxLayout()
@@ -345,18 +373,30 @@ class KAudaApp(QWidget):
         grip_layout.addWidget(label)
         grip_layout.addWidget(self.gripper_switch)
         gb_gripper.setLayout(grip_layout)
+        layout_tools.addWidget(gb_gripper)
+        
+        layout_tools.addStretch()
+        tab_tools.setLayout(layout_tools)
 
-        left.addWidget(gb_gripper)
 
-        # add panes
-        layout.addLayout(left, 3)
-        layout.addLayout(right, 7)
-        self.setLayout(layout)
+        # Add Tabs to Top Layout
+        top_layout.addWidget(self.tabs)
 
         # 3D view on right
         self.view = gl.GLViewWidget()
         self.view.setCameraPosition(distance=800)
-        right.addWidget(self.view)
+        top_layout.addWidget(self.view, stretch=1) # 3D view takes remaining space
+
+        main_layout.addLayout(top_layout, stretch=4)
+
+        # Bottom: Console
+        main_layout.addWidget(QLabel("Console Logs:"))
+        self.console = QTextEdit()
+        self.console.setReadOnly(True)
+        self.console.setMaximumHeight(150) # Limit console height
+        main_layout.addWidget(self.console)
+
+        self.setLayout(main_layout)
 
         # connect sliders to preview update
         for s in [self.slider_x, self.slider_y, self.slider_z, self.slider_grip, self.slider_tool]:
