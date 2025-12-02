@@ -1,41 +1,213 @@
-# KaudaV2_Control
+# KaudaV2 Control
 
-Utilitaires de contrôle pour KaudaV2 (esquisse de projet).
+Application de contrôle pour bras robotique KaudaV2 à 5 axes avec interface graphique PyQt5 et visualisation 3D en temps réel.
 
-Prérequis
-- Windows PowerShell
-- Python 3.10+ (virtualenv recommandé)
+![KaudaV2 Control](kauda_icon.png)
 
-Installation (PowerShell)
+## Caractéristiques
+
+### Interface Utilisateur
+- **Interface à onglets verticaux** avec 4 sections :
+  - **Connexion** : Gestion des ports série et connexion Arduino
+  - **Cartésien** : Contrôle en coordonnées XYZ avec cinématique inverse
+  - **Articulaire** : Contrôle direct des 5 articulations (J1-J5)
+  - **Outils** : Contrôle du gripper
+- **Thème sombre** avec contraste élevé pour une meilleure lisibilité
+- **Console intégrée** pour les logs et retours série
+- **Visualisation 3D** en temps réel du bras robotique
+
+### Fonctionnalités de Contrôle
+- **Cinématique inverse** : Conversion automatique des positions XYZ en angles articulaires
+- **Contrôle articulaire direct** : Sliders pour chaque articulation (J1-J5)
+- **Boutons Jog** : Incrémentation/décrémentation fine de chaque axe
+- **Commandes prédéfinies** :
+  - `GOTO` : Déplacement vers une position articulaire
+  - `GOHOME` : Retour à la position d'origine (0,0,0,0,0)
+  - `Teach Origin` : Définir la position actuelle comme origine
+- **Contrôle du gripper** : Ouverture/fermeture via toggle switch
+
+### Visualisation 3D
+- **Modèle procédural** du bras robotique (pas de fichier STL requis)
+- **Animation fluide** entre les poses
+- **Repères locaux** affichés pour chaque articulation
+- **Marqueurs de joints** pour visualiser les points d'articulation
+- **Grille de référence** pour l'orientation spatiale
+
+### Communication Série
+- **Scan automatique** des ports COM disponibles
+- **Thread de lecture** dédié pour les réponses Arduino
+- **Logs en temps réel** dans la console
+- **Baudrate** : 115200 bps (configurable)
+
+## Prérequis
+
+- **Système d'exploitation** : Windows (testé sur Windows 10/11)
+- **Python** : 3.10 ou supérieur
+- **Environnement virtuel** : Recommandé
+
+## Installation
+
+### 1. Créer un environnement virtuel (recommandé)
 
 ```powershell
-# Créer un environnement virtuel (si nécessaire)
+# Créer l'environnement
 python -m venv .venv
 
 # Activer l'environnement
 .\.venv\Scripts\Activate.ps1
+```
 
+### 2. Installer les dépendances
+
+```powershell
 # Mettre pip à jour
 python -m pip install --upgrade pip
 
-# Installer dépendances
+# Installer les dépendances
 pip install -r requirements.txt
 ```
 
-Commandes utiles
+### Dépendances principales
+- `pyserial` : Communication série avec Arduino
+- `numpy` : Calculs mathématiques et matriciels
+- `PyQt5` : Interface graphique
+- `pyqtgraph` : Visualisation 3D
+- `PyOpenGL` : Rendu OpenGL pour la 3D
+
+## Utilisation
+
+### Lancer l'application
 
 ```powershell
-# Afficher la version du CLI
-.\.venv\Scripts\python.exe main.py --version
+# Avec l'environnement virtuel activé
+python main.py
 
-# Lancer une action d'exemple (remplacer COM3 par le port série)
-.\.venv\Scripts\python.exe main.py run --port COM3 --count 2
-
-# Lancer les tests
-.\.venv\Scripts\python.exe -m pytest
+# Ou directement
+.\.venv\Scripts\python.exe main.py
 ```
 
-Notes
-- `requirements.txt` liste les dépendances runtime et quelques outils de développement (pytest, flake8, black, isort).
-- Le fichier `pyproject.toml` contient des métadonnées minimales et des réglages pour `black`/`isort`.
-- Prochaine étape recommandée : créer le package `src/kaudav2_control` et ajouter des tests et la configuration VS Code.
+### Workflow typique
+
+1. **Connexion**
+   - Sélectionner le port COM de l'Arduino
+   - Cliquer sur "Connect"
+   - Vérifier la connexion dans la console
+
+2. **Contrôle Cartésien**
+   - Ajuster les sliders X, Y, Z pour la position désirée
+   - Utiliser les boutons Jog pour des ajustements fins
+   - Cliquer sur "Envoyer Position" pour transmettre à l'Arduino
+
+3. **Contrôle Articulaire**
+   - Ajuster directement les angles des articulations J1-J5
+   - Cliquer sur "GOTO" pour envoyer la commande
+   - Utiliser "GOHOME" pour retourner à l'origine
+
+4. **Visualisation**
+   - Observer le modèle 3D se mettre à jour en temps réel
+   - Les repères locaux montrent l'orientation de chaque articulation
+
+## Configuration
+
+### Paramètres modifiables (dans `main.py`)
+
+```python
+# Longueurs des segments (mm)
+L1 = 120.0   # épaule → coude
+L2 = 100.0   # coude → poignet
+L3 = 80.0    # poignet → outil
+LBASE = 20.0 # hauteur de la base
+
+# Limites des sliders
+X_MIN, X_MAX = -250, 250
+Y_MIN, Y_MAX = -250, 250
+Z_MIN, Z_MAX = 0, 350
+GRIP_MIN, GRIP_MAX = -90, 90
+TOOL_MIN, TOOL_MAX = -180, 180
+
+# Limites articulaires (degrés)
+J1_MIN, J1_MAX = -165, 165   # base
+J2_MIN, J2_MAX = -100, 120   # épaule
+J3_MIN, J3_MAX = -60, 150    # coude
+J4_MIN, J4_MAX = -175, 175   # poignet
+J5_MIN, J5_MAX = -30, 130    # rotation gripper
+
+# Baudrate série
+BAUDRATE = 115200
+```
+
+## Protocole de Communication
+
+### Format des commandes envoyées à l'Arduino
+
+- **Position articulaire** : `A,<angle1>,<angle2>,<angle3>,<angle4>,<angle5>\n`
+- **GOTO** : `GOTO;A1=<angle1>;A2=<angle2>;A3=<angle3>;A4=<angle4>;A5=<angle5>\n`
+- **GOHOME** : `GOHOME\n`
+- **Gripper ouvert** : `GRIPPER_OPEN\n`
+- **Gripper fermé** : `GRIPPER_CLOSE\n`
+
+## Développement
+
+### Structure du projet
+
+```
+KaudaV2_Control_workspace/
+├── main.py              # Application principale
+├── kinematics_5dof.py   # Cinématique (si utilisé)
+├── requirements.txt     # Dépendances Python
+├── pyproject.toml       # Configuration du projet
+├── kauda_icon.png       # Icône de l'application
+└── README.md           # Ce fichier
+```
+
+### Outils de développement
+
+```powershell
+# Lancer les tests
+python -m pytest
+
+# Formater le code
+python -m black main.py
+
+# Vérifier le style
+python -m flake8 main.py
+
+# Trier les imports
+python -m isort main.py
+```
+
+## Cinématique Inverse
+
+L'application utilise une cinématique inverse 5-DOF basée sur :
+- **Angle de base (θ1)** : Calculé par `atan2(y, x)`
+- **Angles épaule/coude (θ2, θ3)** : Loi des cosinus dans le plan vertical
+- **Angle poignet (θ4)** : Maintien de l'orientation de l'outil
+- **Angle gripper (θ5)** : Contrôle indépendant
+
+## Dépannage
+
+### L'application ne se lance pas
+- Vérifier que toutes les dépendances sont installées : `pip install -r requirements.txt`
+- Vérifier la version de Python : `python --version` (doit être ≥ 3.10)
+
+### Pas de ports COM détectés
+- Vérifier que l'Arduino est connecté
+- Installer les drivers USB appropriés
+- Cliquer sur "Refresh" pour rescanner les ports
+
+### L'icône n'apparaît pas dans la barre des tâches
+- Relancer l'application
+- Vérifier que `kauda_icon.png` est présent dans le répertoire
+
+### Erreurs de communication série
+- Vérifier le baudrate (doit correspondre à l'Arduino : 115200)
+- Vérifier que le port COM est le bon
+- Fermer les autres applications utilisant le port série
+
+## Auteur
+
+Axel Habeillon
+
+## Licence
+
+Ce projet est un utilitaire de contrôle pour le bras robotique KaudaV2.
