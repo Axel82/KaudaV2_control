@@ -15,40 +15,25 @@ Features:
 import sys
 import math
 import time
+import os
 import numpy as np
 import serial
-import serial.tools.list_ports
 import ctypes
-import sys
 from PyQt5 import QtGui
-from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel,
-    QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QCheckBox, QTabWidget
+    QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QTabWidget
 )
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 import pyqtgraph.opengl as gl
-from pyqtgraph.opengl import MeshData, GLMeshItem, GLGridItem, GLScatterPlotItem, GLTextItem
+from pyqtgraph.opengl import MeshData, GLMeshItem, GLGridItem, GLScatterPlotItem
 
-# ---------------------------
-# USER-MODIFIABLE PARAMETERS
-# ---------------------------
-# Segment lengths (mm) -- modify these to match your physical KAuda
-L1 = 120.0   # shoulder -> elbow
-L2 = 100.0   # elbow -> wrist
-L3 = 80.0    # wrist -> tool (effector)
-LBASE = 20.0  # base height
-RADIUS = 10.0  # base radius for cylinders
-
-# Slider limits (adjustable)
-X_MIN, X_MAX = -250, 250
-Y_MIN, Y_MAX = -250, 250
-Z_MIN, Z_MAX = 0, 350
-GRIP_MIN, GRIP_MAX = -90, 90
-TOOL_MIN, TOOL_MAX = -180, 180
-
-# Serial default
-BAUDRATE = 115200
+# Import custom modules
+from config import *
+from serial_comm import SerialReader, scan_ports, format_angles_command, format_goto_command
+from ui_components import ToggleSwitch, create_slider
+from theme import get_dark_palette, get_stylesheet
+from visualization_3d import make_cylinder, make_box, draw_local_frame
 
 # ---------------------------
 # Inverse kinematics
@@ -88,87 +73,6 @@ def inverse_kinematics(x, y, z, tool_angle_deg=0.0, gripper_angle_deg=0.0):
     ]
 
 # ---------------------------
-# Serial reader thread
-# ---------------------------
-class SerialReader(QThread):
-    new_line = pyqtSignal(str)
-    def __init__(self, ser):
-        super().__init__()
-        self.ser = ser
-        self.running = True
-
-    def run(self):
-        while self.running:
-            try:
-                if self.ser.in_waiting:
-                    line = self.ser.readline().decode('utf-8', errors='ignore').rstrip('\r\n')
-                    if line:
-                        self.new_line.emit(line)
-                else:
-                    self.msleep(20)
-            except Exception as e:
-                self.new_line.emit(f"[SerialReadError] {e}")
-                self.running = False
-
-    def stop(self):
-        self.running = False
-        self.wait(200)
-
-# ---------------------------
-# Procedural mesh generation utilities
-# ---------------------------
-def make_cylinder(radius, length, slices=32):
-    """
-    Create a cylindrical MeshData aligned along local +X (height = length along X).
-    We create two rings of vertices (start and end) and faces for the sides.
-    """
-    theta = np.linspace(0, 2*np.pi, slices, endpoint=False)
-    y = radius * np.cos(theta)
-    z = radius * np.sin(theta)
-    x0 = np.zeros(slices, dtype=np.float32)
-    x1 = np.ones(slices, dtype=np.float32) * float(length)
-
-    verts0 = np.column_stack((x0, y, z))
-    verts1 = np.column_stack((x1, y, z))
-    verts = np.vstack((verts0, verts1)).astype(np.float32)
-
-    faces = []
-    n = slices
-    for i in range(n):
-        ni = (i + 1) % n
-        # quad -> two triangles
-        faces.append([i, ni, n + ni])
-        faces.append([i, n + ni, n + i])
-    faces = np.array(faces, dtype=np.int32)
-    md = MeshData(vertexes=verts, faces=faces)
-    return md
-
-def make_box(dx, dy, dz):
-    md = MeshData.cube()
-    # cube vertices are [-1,1] unit cube -> we scale
-    md = MeshData(vertexes=(md.vertexes() * np.array([dx/2.0, dy/2.0, dz/2.0])))
-    return md
-
-class ToggleSwitch(QCheckBox):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setChecked(False)
-        self.setStyleSheet("""
-            QCheckBox::indicator {
-                width: 40px;
-                height: 20px;
-                border-radius: 10px;
-                background-color: #888;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-            }
-            QCheckBox::indicator:unchecked {
-                background-color: #888;
-            }
-        """)
-
-# ---------------------------
 # Main Application
 # ---------------------------
 class KAudaApp(QWidget):
@@ -200,132 +104,9 @@ class KAudaApp(QWidget):
             self.setWindowIcon(QtGui.QIcon(icon_path))
 
     def _apply_theme(self):
-        # Dark Palette
-        dark_palette = QPalette()
-        
-        # Colors
-        color_bg = QColor(45, 45, 45)
-        color_fg = QColor(220, 220, 220)
-        color_base = QColor(30, 30, 30)
-        color_alt_base = QColor(45, 45, 45)
-        color_btn = QColor(60, 60, 60)
-        color_highlight = QColor(42, 130, 218) # Blue highlight
-        color_highlight_text = QColor(255, 255, 255)
-
-        dark_palette.setColor(QPalette.Window, color_bg)
-        dark_palette.setColor(QPalette.WindowText, color_fg)
-        dark_palette.setColor(QPalette.Base, color_base)
-        dark_palette.setColor(QPalette.AlternateBase, color_alt_base)
-        dark_palette.setColor(QPalette.ToolTipBase, color_highlight)
-        dark_palette.setColor(QPalette.ToolTipText, color_highlight_text)
-        dark_palette.setColor(QPalette.Text, color_fg)
-        dark_palette.setColor(QPalette.Button, color_btn)
-        dark_palette.setColor(QPalette.ButtonText, color_fg)
-        dark_palette.setColor(QPalette.BrightText, Qt.red)
-        dark_palette.setColor(QPalette.Link, color_highlight)
-        dark_palette.setColor(QPalette.Highlight, color_highlight)
-        dark_palette.setColor(QPalette.HighlightedText, color_highlight_text)
-
-        self.setPalette(dark_palette)
-
-        # Stylesheet for specific tweaks
-        self.setStyleSheet("""
-            QWidget {
-                color: #ffffff;
-            }
-            QToolTip { 
-                color: #ffffff; 
-                background-color: #2a82da; 
-                border: 1px solid white; 
-            }
-            QGroupBox {
-                border: 1px solid #555;
-                border-radius: 5px;
-                margin-top: 10px;
-                font-weight: bold;
-                color: #ffffff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 3px;
-                left: 10px;
-            }
-            QTabWidget::pane {
-                border: 1px solid #555;
-                background: #2d2d2d;
-            }
-            QTabBar::tab {
-                background: #3c3f41;
-                color: #ffffff;
-                padding: 6px 8px;
-                border: 1px solid #555;
-                border-bottom-color: #555;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                min-width: 60px;
-            }
-            QTabBar::tab:selected, QTabBar::tab:hover {
-                background: #505355;
-                color: #ffffff;
-            }
-            QTabBar::tab:selected {
-                border-color: #555;
-                border-bottom-color: #2d2d2d; /* Blend with pane */
-            }
-            QPushButton {
-                background-color: #3c3f41;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 5px;
-                color: #ffffff;
-            }
-            QPushButton:hover {
-                background-color: #505355;
-            }
-            QPushButton:pressed {
-                background-color: #2a82da;
-                color: #ffffff;
-            }
-            QSlider::groove:horizontal {
-                border: 1px solid #555;
-                height: 8px;
-                background: #2d2d2d;
-                margin: 2px 0;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #2a82da;
-                border: 1px solid #2a82da;
-                width: 18px;
-                height: 18px;
-                margin: -7px 0;
-                border-radius: 9px;
-            }
-            QComboBox {
-                background: #3c3f41;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 4px;
-                color: #ffffff;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 20px;
-                border-left-width: 1px;
-                border-left-color: #555;
-                border-left-style: solid;
-            }
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #ffffff;
-                border: 1px solid #555;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-        """)
+        """Apply dark theme to the application"""
+        self.setPalette(get_dark_palette())
+        self.setStyleSheet(get_stylesheet())
 
     # -----------------------
     # UI construction
@@ -383,23 +164,23 @@ class KAudaApp(QWidget):
         gb_sliders = QGroupBox("Positions et limites")
         grid = QGridLayout()
 
-        self.slider_x, self.label_x = self._add_slider("X (mm)", X_MIN, X_MAX, 0)
+        self.slider_x, self.label_x = create_slider("X (mm)", X_MIN, X_MAX, 0)
         grid.addWidget(self.label_x, 0, 0)
         grid.addWidget(self.slider_x, 0, 1)
 
-        self.slider_y, self.label_y = self._add_slider("Y (mm)", Y_MIN, Y_MAX, 0)
+        self.slider_y, self.label_y = create_slider("Y (mm)", Y_MIN, Y_MAX, 0)
         grid.addWidget(self.label_y, 1, 0)
         grid.addWidget(self.slider_y, 1, 1)
 
-        self.slider_z, self.label_z = self._add_slider("Z (mm)", Z_MIN, Z_MAX, int((Z_MIN+Z_MAX)/2))
+        self.slider_z, self.label_z = create_slider("Z (mm)", Z_MIN, Z_MAX, int((Z_MIN+Z_MAX)/2))
         grid.addWidget(self.label_z, 2, 0)
         grid.addWidget(self.slider_z, 2, 1)
 
-        self.slider_grip, self.label_grip = self._add_slider("Angle pince (deg)", GRIP_MIN, GRIP_MAX, 0)
+        self.slider_grip, self.label_grip = create_slider("Angle pince (deg)", GRIP_MIN, GRIP_MAX, 0)
         grid.addWidget(self.label_grip, 3, 0)
         grid.addWidget(self.slider_grip, 3, 1)
 
-        self.slider_tool, self.label_tool = self._add_slider("Angle outil (deg)", TOOL_MIN, TOOL_MAX, 0)
+        self.slider_tool, self.label_tool = create_slider("Angle outil (deg)", TOOL_MIN, TOOL_MAX, 0)
         grid.addWidget(self.label_tool, 4, 0)
         grid.addWidget(self.slider_tool, 4, 1)
 
@@ -543,20 +324,14 @@ class KAudaApp(QWidget):
         # --- Runner ---
         self.refresh_ports()
 
-    def _add_slider(self, label_text, minv, maxv, default):
-        label = QLabel(f"{label_text} ({minv} → {maxv})")
-        slider = QSlider(Qt.Horizontal)
-        slider.setMinimum(int(minv))
-        slider.setMaximum(int(maxv))
-        slider.setValue(int(default))
-        return slider, label
+
 
     def refresh_ports(self):
         self.combo_com.clear()
-        ports = serial.tools.list_ports.comports()
+        ports = scan_ports()
         for p in ports:
-            self.combo_com.addItem(p.device)
-        self.log(f"Ports scannés: {[p.device for p in ports]}")
+            self.combo_com.addItem(p)
+        self.log(f"Ports scannés: {ports}")
 
     def connect_serial(self):
         port = self.combo_com.currentText()
@@ -643,7 +418,7 @@ class KAudaApp(QWidget):
             self.log("Impossible d'envoyer: Arduino non connecté.")
             return
         try:
-            payload = "A," + ",".join([f"{a:.2f}" for a in angles]) + "\n"
+            payload = format_angles_command(angles)
             self.serial.write(payload.encode('utf-8'))
             self.log(f"[TX] {payload.strip()}")
         except Exception as e:
@@ -662,7 +437,7 @@ class KAudaApp(QWidget):
             self.slider_j5.value(),
         ]
 
-        msg = f"GOTO;A1={angles[0]};A2={angles[1]};A3={angles[2]};A4={angles[3]};A5={angles[4]}\n"
+        msg = format_goto_command(angles)
         try:
             self.serial.write(msg.encode("utf-8"))
             self.log(f"➡️ Sent: {msg.strip()}")
@@ -916,60 +691,13 @@ class KAudaApp(QWidget):
             (F4, "J4")
         ]
         for frame, name in frames_list:
-            frame_items = self.draw_local_frame(frame, name=name)
+            frame_items = draw_local_frame(self.view, frame, name=name)
             self.local_frames.append(frame_items)
 
     # -----------------------
     # Draw local frame axes
     # -----------------------
-    def draw_local_frame(self, frame, name="", length=50, color_x=(1, 0, 0, 1), color_y=(0, 1, 0, 1), color_z=(0, 0, 1, 1)):
-        """
-        Dessine les axes X, Y, Z d'un repère local et ajoute une étiquette visible.
-        :param frame: Matrice 4x4 du repère local.
-        :param name: Nom du repère (ex: "J1").
-        :param length: Longueur des axes.
-        :param color_x: Couleur de l'axe X (rouge).
-        :param color_y: Couleur de l'axe Y (vert).
-        :param color_z: Couleur de l'axe Z (bleu).
-        """
-        origin = frame[:3, 3]
-        items = []
 
-        # Axe X (rouge)
-        x_axis_end = origin + frame[:3, :3] @ np.array([length, 0, 0])
-        x_axis = np.array([origin, x_axis_end])
-        x_line = gl.GLLinePlotItem(pos=x_axis, color=color_x, width=2, antialias=True)
-        self.view.addItem(x_line)
-        items.append(x_line)
-
-        # Axe Y (vert)
-        y_axis_end = origin + frame[:3, :3] @ np.array([0, length, 0])
-        y_axis = np.array([origin, y_axis_end])
-        y_line = gl.GLLinePlotItem(pos=y_axis, color=color_y, width=2, antialias=True)
-        self.view.addItem(y_line)
-        items.append(y_line)
-
-        # Axe Z (bleu)
-        z_axis_end = origin + frame[:3, :3] @ np.array([0, 0, length])
-        z_axis = np.array([origin, z_axis_end])
-        z_line = gl.GLLinePlotItem(pos=z_axis, color=color_z, width=2, antialias=True)
-        self.view.addItem(z_line)
-        items.append(z_line)
-
-        # Ajouter une étiquette pour le repère
-        if name:
-            # Décalage pour éviter la superposition avec les axes
-            text_offset = frame[:3, :3] @ np.array([0, 0, length * 1.2])  # Décalage le long de Z local
-            text_pos = origin + text_offset
-
-            # Création du texte
-            text = GLTextItem(pos=text_pos, text=name, color=(1, 1, 1, 1))
-
-            # Ajout à la vue
-            self.view.addItem(text)
-            items.append(text)
-
-        return items
 
     # -----------------------
     # Animation timer
@@ -1014,13 +742,11 @@ class KAudaApp(QWidget):
 def main():
     # Set Windows AppUserModelID for taskbar icon support
     if sys.platform == 'win32':
-        myappid = 'axelhabeillon.kauda.control.1.0'  # arbitrary string
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     
     app = QApplication(sys.argv)
     
     # Set application icon globally
-    import os
     icon_path = os.path.join(os.path.dirname(__file__), "kauda_icon.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QtGui.QIcon(icon_path))
