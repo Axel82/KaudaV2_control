@@ -324,13 +324,15 @@ class KAudaApp(QWidget):
         <p style='text-align: center;'>
             <b>Version:</b> {version_info['version']}<br>
             <b>Author:</b> {version_info['author']}<br>
-            <b>License:</b> {version_info['license']}
+            <b>License:</b> {version_info['license']}<br>
+            <b>Repository:</b> <a href="{version_info['repository']}">{version_info['repository']}</a>
         </p>
         <p style='text-align: center;'>{version_info['description']}</p>
         """
         info_label = QLabel(info_text)
         info_label.setWordWrap(True)
         info_label.setAlignment(Qt.AlignCenter)
+        info_label.setOpenExternalLinks(True)  # Enable clickable links
         layout_about.addWidget(info_label)
         
         # README viewer

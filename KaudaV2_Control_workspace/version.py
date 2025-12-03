@@ -6,6 +6,7 @@ __version__ = "1.0.0"
 __author__ = "Axel Habeillon"
 __description__ = "Control application for KaudaV2 5-axis robotic arm"
 __license__ = "MIT"
+__repository__ = "https://github.com/Axel82/KaudaV2_control"
 
 
 class Version:
@@ -27,5 +28,6 @@ class Version:
             "version": cls.get_version(),
             "author": __author__,
             "description": __description__,
-            "license": __license__
+            "license": __license__,
+            "repository": __repository__
         }
