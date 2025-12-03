@@ -122,7 +122,10 @@ class KAudaApp(QWidget):
         # Left: Vertical Tabs
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.West)  # Vertical tabs on the left
-        #self.tabs.setFixedWidth(400)
+        self.tabs.setMinimumWidth(300)  # Default minimum width
+        
+        # Connect signal to adjust width based on selected tab
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
         # Create Tab Widgets
         tab_conn = QWidget()
@@ -373,6 +376,15 @@ class KAudaApp(QWidget):
         # --- Runner ---
         self.refresh_ports()
 
+    def _on_tab_changed(self, index):
+        """Adjust tab widget width based on selected tab"""
+        # About tab (index 4) should be wider
+        if index == 4:  # About tab
+            self.tabs.setMinimumWidth(600)
+            self.tabs.setMaximumWidth(600)
+        else:
+            self.tabs.setMinimumWidth(300)
+            self.tabs.setMaximumWidth(300)
 
 
     def refresh_ports(self):
