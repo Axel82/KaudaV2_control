@@ -34,6 +34,7 @@ from serial_comm import SerialReader, scan_ports, format_angles_command, format_
 from ui_components import ToggleSwitch, create_slider
 from theme import get_dark_palette, get_stylesheet
 from visualization_3d import make_cylinder, make_box, draw_local_frame
+from version import Version
 
 # ---------------------------
 # Inverse kinematics
@@ -128,11 +129,13 @@ class KAudaApp(QWidget):
         tab_cart = QWidget()
         tab_joint = QWidget()
         tab_tools = QWidget()
+        tab_about = QWidget()
 
         self.tabs.addTab(tab_conn, "Connexion")
         self.tabs.addTab(tab_cart, "Cartésien")
         self.tabs.addTab(tab_joint, "Articulaire")
         self.tabs.addTab(tab_tools, "Outils")
+        self.tabs.addTab(tab_about, "About")
 
         # --- Tab 1: Connexion ---
         layout_conn = QVBoxLayout()
@@ -297,6 +300,52 @@ class KAudaApp(QWidget):
         
         layout_tools.addStretch()
         tab_tools.setLayout(layout_tools)
+
+        # --- Tab 5: About ---
+        layout_about = QVBoxLayout()
+        
+        # Logo
+        logo_label = QLabel()
+        icon_path = os.path.join(os.path.dirname(__file__), "kauda_icon.png")
+        if os.path.exists(icon_path):
+            pixmap = QtGui.QPixmap(icon_path)
+            scaled_pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+        layout_about.addWidget(logo_label)
+        
+        # Version info
+        version_info = Version.get_full_info()
+        info_text = f"""
+        <h2 style='text-align: center;'>{APP_NAME}</h2>
+        <p style='text-align: center;'>
+            <b>Version:</b> {version_info['version']}<br>
+            <b>Author:</b> {version_info['author']}<br>
+            <b>License:</b> {version_info['license']}
+        </p>
+        <p style='text-align: center;'>{version_info['description']}</p>
+        """
+        info_label = QLabel(info_text)
+        info_label.setWordWrap(True)
+        info_label.setAlignment(Qt.AlignCenter)
+        layout_about.addWidget(info_label)
+        
+        # README viewer
+        readme_label = QLabel("<b>README:</b>")
+        layout_about.addWidget(readme_label)
+        
+        readme_viewer = QTextEdit()
+        readme_viewer.setReadOnly(True)
+        readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+        if os.path.exists(readme_path):
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                readme_content = f.read()
+                readme_viewer.setPlainText(readme_content)
+        else:
+            readme_viewer.setPlainText("README.md not found")
+        layout_about.addWidget(readme_viewer)
+        
+        tab_about.setLayout(layout_about)
 
         # Add Tabs to Top Layout
         top_layout.addWidget(self.tabs)
