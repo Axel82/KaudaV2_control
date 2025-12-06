@@ -2,7 +2,7 @@
 Version management for KaudaV2 Control Application
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Axel Habeillon"
 __description__ = "Control application for KaudaV2 5-axis robotic arm"
 __license__ = "MIT"
@@ -14,7 +14,7 @@ class Version:
     
     MAJOR = 1
     MINOR = 0
-    PATCH = 0
+    PATCH = 1
     
     @classmethod
     def get_version(cls):

@@ -47,13 +47,13 @@ def forward_kinematics(thetas, links):
       pts: list of intermediate joint positions in world frame:
            [p0, p1, p2, p3, p4, p5] where p0 is origin, p5 is tool tip
     Convention:
-      Joint i: rotate about its axis (z/x/x/y/x respectively), then translate along local X by L_i.
+      Joint i: rotate about its axis (z/y/y/y/x respectively), then translate along local X by L_i.
     """
     if len(thetas) != 5 or len(links) != 5:
         raise ValueError("Require 5 thetas and 5 links")
 
     # axes sequence
-    axes = ['z','x','x','y','x']
+    axes = ['z','y','y','y','x']
     T = np.eye(4)
     pts = [T[0:3,3].copy()]  # p0
     for i in range(5):

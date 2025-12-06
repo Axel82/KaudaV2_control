@@ -28,8 +28,10 @@ Application de contrôle pour bras robotique KaudaV2 à 5 axes avec interface gr
 
 ### Visualisation 3D
 - **Modèle procédural** du bras robotique (pas de fichier STL requis)
+- **Gripper réaliste** avec deux mâchoires mobiles qui s'ouvrent/ferment
 - **Animation fluide** entre les poses
-- **Repères locaux** affichés pour chaque articulation
+- **Transformations cinématiques correctes** pour chaque segment
+- **Repères locaux** affichés pour chaque articulation (J1-J4)
 - **Marqueurs de joints** pour visualiser les points d'articulation
 - **Grille de référence** pour l'orientation spatiale
 
@@ -152,12 +154,18 @@ BAUDRATE = 115200
 
 ```
 KaudaV2_Control_workspace/
-├── main.py              # Application principale
-├── kinematics_5dof.py   # Cinématique (si utilisé)
-├── requirements.txt     # Dépendances Python
-├── pyproject.toml       # Configuration du projet
-├── kauda_icon.png       # Icône de l'application
-└── README.md           # Ce fichier
+├── main.py                 # Application principale
+├── config.py               # Configuration (longueurs, limites, baudrate)
+├── ui_components.py        # Composants UI réutilisables
+├── serial_comm.py          # Communication série
+├── theme.py                # Thème sombre de l'interface
+├── visualization_3d.py     # Utilitaires de visualisation 3D
+├── kinematics_5dof.py      # Cinématique directe et inverse
+├── version.py              # Gestion de version
+├── requirements.txt        # Dépendances Python
+├── pyproject.toml          # Configuration du projet
+├── kauda_icon.png          # Icône de l'application
+└── README.md               # Ce fichier
 ```
 
 ### Outils de développement
@@ -184,6 +192,23 @@ L'application utilise une cinématique inverse 5-DOF basée sur :
 - **Angle poignet (θ4)** : Maintien de l'orientation de l'outil
 - **Angle gripper (θ5)** : Contrôle indépendant
 
+## Gripper 3D
+
+Le gripper est modélisé avec deux mâchoires mobiles qui reflètent l'état du toggle switch :
+
+### Caractéristiques
+- **Deux mâchoires parallélépipédiques** : 20mm × 3mm × 8mm chacune
+- **Attachement** : Extrémité du segment wrist (L3 = 80mm)
+- **Animation** : Synchronisée avec le toggle "Pince" dans l'onglet "Outils"
+
+### États
+- **Fermé** : Espacement de 4mm entre les mâchoires (±2mm)
+- **Ouvert** : Espacement de 15mm entre les mâchoires (±7.5mm)
+
+### Commandes
+- Toggle ON → `GRIPPER_OPEN\n` → Mâchoires s'écartent
+- Toggle OFF → `GRIPPER_CLOSE\n` → Mâchoires se rapprochent
+
 ## Dépannage
 
 ### L'application ne se lance pas
@@ -203,6 +228,34 @@ L'application utilise une cinématique inverse 5-DOF basée sur :
 - Vérifier le baudrate (doit correspondre à l'Arduino : 115200)
 - Vérifier que le port COM est le bon
 - Fermer les autres applications utilisant le port série
+
+## Changelog
+
+### Version 1.0.1 (2025-12-06)
+
+**Améliorations de la visualisation 3D**
+- ✨ Ajout d'un gripper réaliste avec deux mâchoires mobiles
+- ✨ Animation d'ouverture/fermeture synchronisée avec le toggle UI
+- 🐛 Correction des transformations cinématiques pour tous les segments
+- 🐛 Correction de l'attachement du gripper à l'extrémité de L3 (wrist)
+
+**Améliorations de l'interface**
+- ♻️ Refactorisation : création de la fonction `create_joint_slider()` dans `ui_components.py`
+- 🎨 Simplification du code des sliders articulaires (réduction de ~15 lignes)
+
+**Validation et documentation**
+- ✅ Validation complète des équations de cinématique inverse
+- ✅ Correction de la séquence des axes dans `kinematics_5dof.py` (z/y/y/y/x)
+- 📝 Ajout de documentation détaillée sur le modèle cinématique
+
+### Version 1.0.0 (2025-12-02)
+
+**Version initiale**
+- Interface graphique PyQt5 avec onglets verticaux
+- Contrôle cartésien et articulaire
+- Visualisation 3D procédurale
+- Communication série avec Arduino
+- Cinématique inverse 5-DOF
 
 ## Auteur
 

@@ -37,9 +37,28 @@ def create_slider(label_text, minv, maxv, default):
     Returns:
         tuple: (slider, label)
     """
-    label = QLabel(f"{label_text} ({minv} → {maxv})")
+    label = QLabel(label_text)
     slider = QSlider(Qt.Horizontal)
     slider.setMinimum(int(minv))
     slider.setMaximum(int(maxv))
+    slider.setValue(int(default))
+    return slider, label
+
+
+def create_joint_slider(joint_name, joint_num, minv, maxv, default=0):
+    """
+    Create a joint slider with label
+    Args:
+        joint_name: Name of the joint (e.g., "Base", "Shoulder", "Elbow")
+        joint_num: Joint number (1-5)
+        minv: Minimum angle value (degrees)
+        maxv: Maximum angle value (degrees)
+        default: Default angle value (degrees)
+    Returns:
+        tuple: (slider, label)
+    """
+    label = QLabel(f"J{joint_num} {joint_name}")
+    slider = QSlider(Qt.Horizontal)
+    slider.setRange(int(minv), int(maxv))
     slider.setValue(int(default))
     return slider, label

@@ -31,7 +31,7 @@ from pyqtgraph.opengl import MeshData, GLMeshItem, GLGridItem, GLScatterPlotItem
 # Import custom modules
 from config import *
 from serial_comm import SerialReader, scan_ports, format_angles_command, format_goto_command
-from ui_components import ToggleSwitch, create_slider
+from ui_components import ToggleSwitch, create_slider, create_joint_slider
 from theme import get_dark_palette, get_stylesheet
 from visualization_3d import make_cylinder, make_box, draw_local_frame
 from version import Version
@@ -90,6 +90,9 @@ class KAudaApp(QWidget):
         # store raw mesh data (vertex arrays & faces) for transforms
         self.raw_mesh = {}    # key -> dict { 'md': MeshData, 'verts': np.array, 'faces': np.array }
         self.local_frames = []  # Initialisation de la liste pour stocker les lignes des axes
+        
+        # Gripper state
+        self.gripper_open = False  # False = closed, True = open
 
         self._build_ui()
         self._build_3d()
@@ -229,42 +232,27 @@ class KAudaApp(QWidget):
         grid_j = QGridLayout()
 
         # Joint 1
-        self.slider_j1 = QSlider(Qt.Horizontal)
-        self.slider_j1.setRange(J1_MIN, J1_MAX)
-        self.slider_j1.setValue(0)
-        lbl_j1 = QLabel(f"J1 Base ({J1_MIN} → {J1_MAX})")
+        self.slider_j1, lbl_j1 = create_joint_slider("Base", 1, J1_MIN, J1_MAX)
         grid_j.addWidget(lbl_j1, 0, 0)
         grid_j.addWidget(self.slider_j1, 0, 1)
 
         # Joint 2
-        self.slider_j2 = QSlider(Qt.Horizontal)
-        self.slider_j2.setRange(J2_MIN, J2_MAX)
-        self.slider_j2.setValue(0)
-        lbl_j2 = QLabel(f"J2 Shoulder ({J2_MIN} → {J2_MAX})")
+        self.slider_j2, lbl_j2 = create_joint_slider("Shoulder", 2, J2_MIN, J2_MAX)
         grid_j.addWidget(lbl_j2, 1, 0)
         grid_j.addWidget(self.slider_j2, 1, 1)
 
         # Joint 3
-        self.slider_j3 = QSlider(Qt.Horizontal)
-        self.slider_j3.setRange(J3_MIN, J3_MAX)
-        self.slider_j3.setValue(0)
-        lbl_j3 = QLabel(f"J3 Elbow ({J3_MIN} → {J3_MAX})")
+        self.slider_j3, lbl_j3 = create_joint_slider("Elbow", 3, J3_MIN, J3_MAX)
         grid_j.addWidget(lbl_j3, 2, 0)
         grid_j.addWidget(self.slider_j3, 2, 1)
 
         # Joint 4
-        self.slider_j4 = QSlider(Qt.Horizontal)
-        self.slider_j4.setRange(J4_MIN, J4_MAX)
-        self.slider_j4.setValue(0)
-        lbl_j4 = QLabel(f"J4 Wrist ({J4_MIN} → {J4_MAX})")
+        self.slider_j4, lbl_j4 = create_joint_slider("Wrist", 4, J4_MIN, J4_MAX)
         grid_j.addWidget(lbl_j4, 3, 0)
         grid_j.addWidget(self.slider_j4, 3, 1)
 
         # Joint 5
-        self.slider_j5 = QSlider(Qt.Horizontal)
-        self.slider_j5.setRange(J5_MIN, J5_MAX)
-        self.slider_j5.setValue(0)
-        lbl_j5 = QLabel(f"J5 Gripper ({J5_MIN} → {J5_MAX})")
+        self.slider_j5, lbl_j5 = create_joint_slider("Gripper", 5, J5_MIN, J5_MAX)
         grid_j.addWidget(lbl_j5, 4, 0)
         grid_j.addWidget(self.slider_j5, 4, 1)
 
@@ -531,6 +519,13 @@ class KAudaApp(QWidget):
             self.log("⚠️ Aucun port COM connecté.")
 
     def _on_gripper_toggled(self, checked):
+        # Update gripper state
+        self.gripper_open = checked
+        
+        # Refresh 3D visualization to show jaw movement
+        self.update_3d_immediate(self.current_angles)
+        
+        # Send serial command
         if not self.serial or not self.serial.isOpen():
             self.log("⚠️ Aucun port COM connecté")
             return
@@ -563,19 +558,22 @@ class KAudaApp(QWidget):
         shoulder_md = make_cylinder(RADIUS, L1, slices=32)
         forearm_md = make_cylinder(RADIUS * 0.85, L2, slices=28)
         wrist_md = make_cylinder(RADIUS * 0.7, L3, slices=20)
-        # --- cube (gripper) explicit vertices & faces (fallback without MeshData.cube()) ---
-        cube_verts = np.array([
-            [-1.0, -1.0, -1.0],
-            [ 1.0, -1.0, -1.0],
-            [ 1.0,  1.0, -1.0],
-            [-1.0,  1.0, -1.0],
-            [-1.0, -1.0,  1.0],
-            [ 1.0, -1.0,  1.0],
-            [ 1.0,  1.0,  1.0],
-            [-1.0,  1.0,  1.0],
+        
+        # --- Gripper jaws geometry ---
+        # Create two jaw meshes (left and right)
+        # Each jaw is a rectangular box: 20mm (length) x 3mm (width) x 8mm (height)
+        jaw_verts = np.array([
+            [0, -1.5, -4],   # 0: Base back left
+            [20, -1.5, -4],  # 1: Base front left
+            [20, 1.5, -4],   # 2: Base front right
+            [0, 1.5, -4],    # 3: Base back right
+            [0, -1.5, 4],    # 4: Top back left
+            [20, -1.5, 4],   # 5: Top front left
+            [20, 1.5, 4],    # 6: Top front right
+            [0, 1.5, 4],     # 7: Top back right
         ], dtype=np.float32)
 
-        cube_faces = np.array([
+        jaw_faces = np.array([
             [0,1,2], [0,2,3],   # bottom
             [4,6,5], [4,7,6],   # top
             [0,4,5], [0,5,1],   # front
@@ -601,15 +599,19 @@ class KAudaApp(QWidget):
             'verts': wrist_md.vertexes().copy(),
             'faces': wrist_md.faces().copy()
         }
-        # cube vertices for gripper
-        self.raw_mesh['gripper'] = {
-            'verts': cube_verts.copy(),
-            'faces': cube_faces.copy()
+        # Store jaw geometry for both left and right jaws
+        self.raw_mesh['jaw_left'] = {
+            'verts': jaw_verts.copy(),
+            'faces': jaw_faces.copy()
+        }
+        self.raw_mesh['jaw_right'] = {
+            'verts': jaw_verts.copy(),
+            'faces': jaw_faces.copy()
         }
 
         # create GLMeshItem placeholders (we'll update meshdata per frame)
         self.mesh_items = {}
-        for key in ['base', 'shoulder', 'forearm', 'wrist', 'gripper']:
+        for key in ['base', 'shoulder', 'forearm', 'wrist', 'jaw_left', 'jaw_right']:
             md = MeshData(vertexes=self.raw_mesh[key]['verts'], faces=self.raw_mesh[key]['faces'])
             item = GLMeshItem(meshdata=md, smooth=True, shader='shaded', drawEdges=False)
             self.view.addItem(item)
@@ -691,13 +693,13 @@ class KAudaApp(QWidget):
         F5 = F4
 
         # Mapping keys -> frames to use for transforming mesh vertices
-        # Les maillages sont placés correctement, sans décalage de L/2
+        # Each segment must include the rotation of its END joint to rotate correctly
         frames = {
             'base': F0 @ RotY(-math.pi/2) @ Tx(LBASE / 2.0),  # Base mesh (vertical cylinder)
-            'shoulder': F1,  # Shoulder mesh (début à F1, fin à F2)
-            'forearm': F2,   # Forearm mesh (début à F2, fin à F3)
-            'wrist': F3,     # Wrist mesh (début à F3, fin à F4)
-            'gripper': F4    # Gripper mesh (attaché à F4)
+            'shoulder': F1 @ RotY(theta2),  # Shoulder: starts at F1, rotates with theta2
+            'forearm': F2 @ RotY(theta3),   # Forearm: starts at F2, rotates with theta3
+            'wrist': F3 @ RotY(theta4),     # Wrist: starts at F3, rotates with theta4
+            'gripper': F4                    # Gripper mesh (attaché à F4)
         }
 
         # Apply transforms to each mesh (inchangé)
@@ -712,15 +714,25 @@ class KAudaApp(QWidget):
             hom[:, :3] = verts
             frame = frames.get(key, np.eye(4))
 
-            # Special handling for gripper
-            if key == 'gripper':
-                verts_scaled = verts * np.array([10.0, 6.0, 6.0])  # Scale gripper
-                hom2 = np.ones((verts_scaled.shape[0], 4), dtype=np.float64)
-                hom2[:, :3] = verts_scaled
+            # Special handling for gripper jaws
+            if key in ['jaw_left', 'jaw_right']:
+                # Determine jaw offset based on gripper state
+                # Closed: ±2mm spacing (total 4mm gap)
+                # Open: ±7.5mm spacing (total 15mm gap)
+                offset_y = 7.5 if self.gripper_open else 2.0
+                
+                # Left jaw: negative Y offset, Right jaw: positive Y offset
+                if key == 'jaw_left':
+                    offset_y = -offset_y
+                
+                # Create transformation: translate along X (forward) and Y (lateral)
                 T_offset = np.eye(4)
-                T_offset[0, 3] = 10.0  # Offset gripper along local X
-                final_frame = frame @ T_offset
-                trans = (final_frame @ hom2.T).T
+                T_offset[0, 3] = 10.0  # Forward offset along local X
+                T_offset[1, 3] = offset_y  # Lateral offset along local Y
+                
+                # Apply transformation - attach to F4 (end of wrist/L3)
+                final_frame = F4 @ T_offset
+                trans = (final_frame @ hom.T).T
                 verts_t = trans[:, :3].astype(np.float32)
             else:
                 trans = (frame @ hom.T).T
