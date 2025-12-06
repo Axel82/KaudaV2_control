@@ -125,7 +125,7 @@ class KAudaApp(QWidget):
         # Left: Vertical Tabs
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.West)  # Vertical tabs on the left
-        self.tabs.setMinimumWidth(300)  # Default minimum width
+        self.tabs.setMinimumWidth(450)  # Increased to accommodate wider sliders
         
         # Connect signal to adjust width based on selected tab
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -173,25 +173,30 @@ class KAudaApp(QWidget):
         gb_sliders = QGroupBox("Positions et limites")
         grid = QGridLayout()
 
-        self.slider_x, self.label_x = create_slider("X (mm)", X_MIN, X_MAX, 0)
+        self.slider_x, self.label_x, self.value_x = create_slider("X (mm)", X_MIN, X_MAX, 0)
         grid.addWidget(self.label_x, 0, 0)
         grid.addWidget(self.slider_x, 0, 1)
+        grid.addWidget(self.value_x, 0, 2)
 
-        self.slider_y, self.label_y = create_slider("Y (mm)", Y_MIN, Y_MAX, 0)
+        self.slider_y, self.label_y, self.value_y = create_slider("Y (mm)", Y_MIN, Y_MAX, 0)
         grid.addWidget(self.label_y, 1, 0)
         grid.addWidget(self.slider_y, 1, 1)
+        grid.addWidget(self.value_y, 1, 2)
 
-        self.slider_z, self.label_z = create_slider("Z (mm)", Z_MIN, Z_MAX, int((Z_MIN+Z_MAX)/2))
+        self.slider_z, self.label_z, self.value_z = create_slider("Z (mm)", Z_MIN, Z_MAX, int((Z_MIN+Z_MAX)/2))
         grid.addWidget(self.label_z, 2, 0)
         grid.addWidget(self.slider_z, 2, 1)
+        grid.addWidget(self.value_z, 2, 2)
 
-        self.slider_grip, self.label_grip = create_slider("Angle pince (deg)", GRIP_MIN, GRIP_MAX, 0)
+        self.slider_grip, self.label_grip, self.value_grip = create_slider("Angle pince (deg)", GRIP_MIN, GRIP_MAX, 0)
         grid.addWidget(self.label_grip, 3, 0)
         grid.addWidget(self.slider_grip, 3, 1)
+        grid.addWidget(self.value_grip, 3, 2)
 
-        self.slider_tool, self.label_tool = create_slider("Angle outil (deg)", TOOL_MIN, TOOL_MAX, 0)
+        self.slider_tool, self.label_tool, self.value_tool = create_slider("Angle outil (deg)", TOOL_MIN, TOOL_MAX, 0)
         grid.addWidget(self.label_tool, 4, 0)
         grid.addWidget(self.slider_tool, 4, 1)
+        grid.addWidget(self.value_tool, 4, 2)
 
         gb_sliders.setLayout(grid)
         layout_cart.addWidget(gb_sliders)
@@ -220,41 +225,39 @@ class KAudaApp(QWidget):
 
         # --- Tab 3: Articulaire ---
         layout_joint = QVBoxLayout()
-        
-        # Constants for joint slider ranges (deg) -- Mise à jour selon les specs KAuda
-        J1_MIN, J1_MAX = -165, 165   # base
-        J2_MIN, J2_MAX = -100, 120   # shoulder
-        J3_MIN, J3_MAX = -60, 150    # elbow
-        J4_MIN, J4_MAX = -175, 175   # wrist
-        J5_MIN, J5_MAX = -30, 130    # gripper rotation
 
         gb_joints = QGroupBox("Joint Angles (deg) - pour GOTO")
         grid_j = QGridLayout()
 
         # Joint 1
-        self.slider_j1, lbl_j1 = create_joint_slider("Base", 1, J1_MIN, J1_MAX)
+        self.slider_j1, lbl_j1, val_j1 = create_joint_slider("Base", 1, J1_MIN, J1_MAX)
         grid_j.addWidget(lbl_j1, 0, 0)
         grid_j.addWidget(self.slider_j1, 0, 1)
+        grid_j.addWidget(val_j1, 0, 2)
 
         # Joint 2
-        self.slider_j2, lbl_j2 = create_joint_slider("Shoulder", 2, J2_MIN, J2_MAX)
+        self.slider_j2, lbl_j2, val_j2 = create_joint_slider("Shoulder", 2, J2_MIN, J2_MAX)
         grid_j.addWidget(lbl_j2, 1, 0)
         grid_j.addWidget(self.slider_j2, 1, 1)
+        grid_j.addWidget(val_j2, 1, 2)
 
         # Joint 3
-        self.slider_j3, lbl_j3 = create_joint_slider("Elbow", 3, J3_MIN, J3_MAX)
+        self.slider_j3, lbl_j3, val_j3 = create_joint_slider("Elbow", 3, J3_MIN, J3_MAX)
         grid_j.addWidget(lbl_j3, 2, 0)
         grid_j.addWidget(self.slider_j3, 2, 1)
+        grid_j.addWidget(val_j3, 2, 2)
 
         # Joint 4
-        self.slider_j4, lbl_j4 = create_joint_slider("Wrist", 4, J4_MIN, J4_MAX)
+        self.slider_j4, lbl_j4, val_j4 = create_joint_slider("Wrist", 4, J4_MIN, J4_MAX)
         grid_j.addWidget(lbl_j4, 3, 0)
         grid_j.addWidget(self.slider_j4, 3, 1)
+        grid_j.addWidget(val_j4, 3, 2)
 
         # Joint 5
-        self.slider_j5, lbl_j5 = create_joint_slider("Gripper", 5, J5_MIN, J5_MAX)
+        self.slider_j5, lbl_j5, val_j5 = create_joint_slider("Gripper", 5, J5_MIN, J5_MAX)
         grid_j.addWidget(lbl_j5, 4, 0)
         grid_j.addWidget(self.slider_j5, 4, 1)
+        grid_j.addWidget(val_j5, 4, 2)
 
         gb_joints.setLayout(grid_j)
         layout_joint.addWidget(gb_joints)
@@ -373,8 +376,8 @@ class KAudaApp(QWidget):
             self.tabs.setMinimumWidth(600)
             self.tabs.setMaximumWidth(600)
         else:
-            self.tabs.setMinimumWidth(300)
-            self.tabs.setMaximumWidth(300)
+            self.tabs.setMinimumWidth(450)
+            self.tabs.setMaximumWidth(450)
 
 
     def refresh_ports(self):

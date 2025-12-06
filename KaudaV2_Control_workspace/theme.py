@@ -104,19 +104,35 @@ def get_stylesheet():
             color: #ffffff;
         }
         QSlider::groove:horizontal {
-            border: 1px solid #555;
-            height: 8px;
-            background: #2d2d2d;
+            border: none;
+            height: 6px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #3a3a3a, stop:1 #2d2d2d);
             margin: 2px 0;
-            border-radius: 4px;
+            border-radius: 3px;
         }
         QSlider::handle:horizontal {
-            background: #2a82da;
-            border: 1px solid #2a82da;
-            width: 18px;
-            height: 18px;
-            margin: -7px 0;
-            border-radius: 9px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #4a9eff, stop:1 #2a82da);
+            border: 2px solid #1a5fa0;
+            width: 20px;
+            height: 20px;
+            margin: -8px 0;
+            border-radius: 10px;
+        }
+        QSlider::handle:horizontal:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #5aafff, stop:1 #3a92ea);
+            border: 2px solid #2a6fb0;
+        }
+        QSlider::handle:horizontal:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #3a8eef, stop:1 #1a72ca);
+        }
+        QSlider::sub-page:horizontal {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #4a9eff, stop:1 #2a82da);
+            border-radius: 3px;
         }
         QComboBox {
             background: #3c3f41;
