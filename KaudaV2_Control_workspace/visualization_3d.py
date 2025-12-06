@@ -55,7 +55,7 @@ def make_box(dx, dy, dz):
     return md
 
 
-def draw_local_frame(view, frame, name="", length=50, 
+def draw_local_frame(view, frame, name="", length=20, 
                      color_x=(1, 0, 0, 1), color_y=(0, 1, 0, 1), color_z=(0, 0, 1, 1)):
     """
     Draw the X, Y, Z axes of a local frame and add a visible label.

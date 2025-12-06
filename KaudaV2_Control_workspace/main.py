@@ -336,7 +336,7 @@ class KAudaApp(QWidget):
         if os.path.exists(readme_path):
             with open(readme_path, 'r', encoding='utf-8') as f:
                 readme_content = f.read()
-                readme_viewer.setPlainText(readme_content)
+                readme_viewer.setMarkdown(readme_content)  # Use Markdown rendering
         else:
             readme_viewer.setPlainText("README.md not found")
         layout_about.addWidget(readme_viewer)
@@ -549,11 +549,22 @@ class KAudaApp(QWidget):
     # 3D scene (procedural)
     # -----------------------
     def _build_3d(self):
-        # grid
+        # Enhanced grid with better visibility
         g = GLGridItem()
         g.setSize(800, 800)
         g.setSpacing(50, 50)
+        g.setColor((100, 100, 120, 150))  # Subtle blue-gray color
         self.view.addItem(g)
+        
+        # Set background color for better contrast
+        self.view.setBackgroundColor((25, 25, 30))
+        
+        # Add global reference frame at origin
+        world_frame = np.eye(4)  # Identity matrix = origin
+        draw_local_frame(self.view, world_frame, name="World", length=40,
+                        color_x=(1, 0, 0, 1),    # Red for X
+                        color_y=(0, 1, 0, 1),    # Green for Y
+                        color_z=(0, 0, 1, 1))    # Blue for Z
 
         # create procedural mesh primitives (raw)
         # Base (short cylinder)
@@ -612,11 +623,28 @@ class KAudaApp(QWidget):
             'faces': jaw_faces.copy()
         }
 
-        # create GLMeshItem placeholders (we'll update meshdata per frame)
+        # create GLMeshItem placeholders with distinct colors for each segment
+        # Color palette: realistic robotic colors
+        colors = {
+            'base': (0.3, 0.3, 0.35, 1.0),          # Dark gray (base platform)
+            'shoulder': (0.85, 0.45, 0.15, 1.0),    # Orange (main arm segment)
+            'forearm': (0.75, 0.40, 0.12, 1.0),     # Darker orange (forearm)
+            'wrist': (0.4, 0.4, 0.45, 1.0),         # Medium gray (wrist)
+            'jaw_left': (0.2, 0.5, 0.8, 1.0),       # Blue (gripper jaw)
+            'jaw_right': (0.2, 0.5, 0.8, 1.0),      # Blue (gripper jaw)
+        }
+        
         self.mesh_items = {}
         for key in ['base', 'shoulder', 'forearm', 'wrist', 'jaw_left', 'jaw_right']:
             md = MeshData(vertexes=self.raw_mesh[key]['verts'], faces=self.raw_mesh[key]['faces'])
-            item = GLMeshItem(meshdata=md, smooth=True, shader='shaded', drawEdges=False)
+            item = GLMeshItem(
+                meshdata=md,
+                smooth=True,
+                shader='shaded',
+                drawEdges=False,
+                color=colors[key],
+                glOptions='opaque'
+            )
             self.view.addItem(item)
             self.mesh_items[key] = item
 

@@ -2,8 +2,6 @@
 
 Application de contrôle pour bras robotique KaudaV2 à 5 axes avec interface graphique PyQt5 et visualisation 3D en temps réel.
 
-![KaudaV2 Control](kauda_icon.png)
-
 ## Caractéristiques
 
 ### Interface Utilisateur
@@ -28,12 +26,15 @@ Application de contrôle pour bras robotique KaudaV2 à 5 axes avec interface gr
 
 ### Visualisation 3D
 - **Modèle procédural** du bras robotique (pas de fichier STL requis)
+- **Couleurs distinctes** pour chaque segment (base grise, bras orange, gripper bleu)
 - **Gripper réaliste** avec deux mâchoires mobiles qui s'ouvrent/ferment
 - **Animation fluide** entre les poses
 - **Transformations cinématiques correctes** pour chaque segment
+- **Repère global** à l'origine (axes X/Y/Z : Rouge/Vert/Bleu)
 - **Repères locaux** affichés pour chaque articulation (J1-J4)
 - **Marqueurs de joints** pour visualiser les points d'articulation
-- **Grille de référence** pour l'orientation spatiale
+- **Grille de référence** avec couleur subtile pour l'orientation spatiale
+- **Fond sombre** pour meilleur contraste visuel
 
 ### Communication Série
 - **Scan automatique** des ports COM disponibles
@@ -208,6 +209,40 @@ Le gripper est modélisé avec deux mâchoires mobiles qui reflètent l'état du
 ### Commandes
 - Toggle ON → `GRIPPER_OPEN\n` → Mâchoires s'écartent
 - Toggle OFF → `GRIPPER_CLOSE\n` → Mâchoires se rapprochent
+
+## Système de Repères 3D
+
+L'application affiche plusieurs repères pour faciliter la compréhension de l'orientation spatiale :
+
+### Repère Global (World Frame)
+
+Affiché à l'origine de la grille avec le label "World" :
+
+| Axe | Couleur | Direction | Longueur |
+|-----|---------|-----------|----------|
+| **X** | 🔴 Rouge | Horizontal (droite) | 40mm |
+| **Y** | 🟢 Vert | Horizontal (avant) | 40mm |
+| **Z** | 🔵 Bleu | Vertical (haut) | 40mm |
+
+**Convention** : RGB = XYZ (standard en robotique et infographie 3D)
+
+### Repères Locaux
+
+Chaque articulation (J1 à J4) possède son propre repère local :
+- **Longueur des axes** : 20mm
+- **Couleurs** : Rouge (X), Vert (Y), Bleu (Z)
+- **Labels** : "J1", "J2", "J3", "J4"
+- **Utilité** : Visualiser l'orientation de chaque articulation
+
+### Palette de Couleurs des Segments
+
+| Segment | Couleur | Code RGB |
+|---------|---------|----------|
+| Base | Gris foncé | (0.3, 0.3, 0.35) |
+| Shoulder | Orange vif | (0.85, 0.45, 0.15) |
+| Forearm | Orange foncé | (0.75, 0.40, 0.12) |
+| Wrist | Gris moyen | (0.4, 0.4, 0.45) |
+| Gripper | Bleu | (0.2, 0.5, 0.8) |
 
 ## Dépannage
 
