@@ -26,7 +26,7 @@ from robot_config import (
     JAW_LENGTH, JAW_WIDTH, JAW_HEIGHT,
     JAW_OFFSET_CLOSED, JAW_OFFSET_OPEN, JAW_FORWARD_OFFSET,
     # Kinematic configuration
-    JOINT_AXES,
+    JOINT_AXES, HOME_ANGULAR_POSITION,
     # Helper functions
     get_joint_limits, get_segment_length, get_workspace_limits
 )

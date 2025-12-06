@@ -499,7 +499,8 @@ class KAudaApp(QWidget):
             self.log(f"❌ Erreur d'envoi GOTO : {e}")
 
     def on_gohome_clicked(self):
-        home = [0, 0, 0, 0, 0]
+        # Use HOME_POSITION from robot_config
+        home = HOME_ANGULAR_POSITION
 
         # 1) Mise à jour UI (sliders)
         self.slider_j1.setValue(home[0])

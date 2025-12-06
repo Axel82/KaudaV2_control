@@ -78,6 +78,10 @@ JAW_FORWARD_OFFSET = 10.0   # Forward offset from wrist end
 # Format: ['axis1', 'axis2', 'axis3', 'axis4', 'axis5']
 JOINT_AXES = ['z', 'y', 'y', 'y', 'x']
 
+# Home position (default safe position)
+# Format: [J1, J2, J3, J4, J5] in degrees
+HOME_ANGULAR_POSITION = [0, -90, 0, 0, 0]
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
