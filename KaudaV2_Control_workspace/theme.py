@@ -115,10 +115,10 @@ def get_stylesheet():
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                 stop:0 #4a9eff, stop:1 #2a82da);
             border: 2px solid #1a5fa0;
-            width: 20px;
-            height: 20px;
-            margin: -8px 0;
-            border-radius: 10px;
+            width: 14px;
+            height: 14px;
+            margin: -4px 0;
+            border-radius: 5px;
         }
         QSlider::handle:horizontal:hover {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
