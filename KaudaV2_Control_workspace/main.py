@@ -36,6 +36,9 @@ from theme import get_dark_palette, get_stylesheet
 from visualization_3d import make_cylinder, make_box, draw_local_frame
 from version import Version
 from kinematics_5dof import inverse_kinematics, forward_kinematics, deg2rad
+from stl_mesh import load_stl_mesh
+
+STL_DIR = os.path.join(os.path.dirname(__file__), "STL")
 
 # ---------------------------
 # Main Application
@@ -545,253 +548,111 @@ class KAudaApp(QWidget):
         
         # Set background color for better contrast
         self.view.setBackgroundColor((25, 25, 30))
-        
-        # Add global reference frame at origin
-        world_frame = np.eye(4)  # Identity matrix = origin
-        draw_local_frame(self.view, world_frame, name="World", length=40,
-                        color_x=(1, 0, 0, 1),    # Red for X
-                        color_y=(0, 1, 0, 1),    # Green for Y
-                        color_z=(0, 0, 1, 1))    # Blue for Z
 
-        # create procedural mesh primitives (raw)
-        # Base (short cylinder)
-        base_md = make_cylinder(RADIUS * 1.5, LBASE, slices=40)
-        shoulder_md = make_cylinder(RADIUS, L1, slices=32)
-        forearm_md = make_cylinder(RADIUS * 0.85, L2, slices=28)
-        wrist_md = make_cylinder(RADIUS * 0.7, L3, slices=20)
-        
-        # --- Gripper jaws geometry ---
-        # Create two jaw meshes (left and right)
-        # Each jaw is a rectangular box: 20mm (length) x 3mm (width) x 8mm (height)
-        jaw_verts = np.array([
-            [0, -1.5, -4],   # 0: Base back left
-            [20, -1.5, -4],  # 1: Base front left
-            [20, 1.5, -4],   # 2: Base front right
-            [0, 1.5, -4],    # 3: Base back right
-            [0, -1.5, 4],    # 4: Top back left
-            [20, -1.5, 4],   # 5: Top front left
-            [20, 1.5, 4],    # 6: Top front right
-            [0, 1.5, 4],     # 7: Top back right
-        ], dtype=np.float32)
+        # Joints markers
+        self.joints = GLScatterPlotItem(size=8, color=(1,1,0,1))
+        self.view.addItem(self.joints)
+        self.local_frames = []
 
-        jaw_faces = np.array([
-            [0,1,2], [0,2,3],   # bottom
-            [4,6,5], [4,7,6],   # top
-            [0,4,5], [0,5,1],   # front
-            [1,5,6], [1,6,2],   # right
-            [2,6,7], [2,7,3],   # back
-            [3,7,4], [3,4,0],   # left
-        ], dtype=np.int32)
-
-        # store raw mesh arrays for transformations
-        self.raw_mesh['base'] = {
-            'verts': base_md.vertexes().copy(),
-            'faces': base_md.faces().copy()
-        }
-        self.raw_mesh['shoulder'] = {
-            'verts': shoulder_md.vertexes().copy(),
-            'faces': shoulder_md.faces().copy()
-        }
-        self.raw_mesh['forearm'] = {
-            'verts': forearm_md.vertexes().copy(),
-            'faces': forearm_md.faces().copy()
-        }
-        self.raw_mesh['wrist'] = {
-            'verts': wrist_md.vertexes().copy(),
-            'faces': wrist_md.faces().copy()
-        }
-        # Store jaw geometry for both left and right jaws
-        self.raw_mesh['jaw_left'] = {
-            'verts': jaw_verts.copy(),
-            'faces': jaw_faces.copy()
-        }
-        self.raw_mesh['jaw_right'] = {
-            'verts': jaw_verts.copy(),
-            'faces': jaw_faces.copy()
-        }
-
-        # create GLMeshItem placeholders with distinct colors for each segment
-        # Color palette: realistic robotic colors
-        colors = {
-            'base': (0.3, 0.3, 0.35, 1.0),          # Dark gray (base platform)
-            'shoulder': (0.85, 0.45, 0.15, 1.0),    # Orange (main arm segment)
-            'forearm': (0.75, 0.40, 0.12, 1.0),     # Darker orange (forearm)
-            'wrist': (0.4, 0.4, 0.45, 1.0),         # Medium gray (wrist)
-            'jaw_left': (0.2, 0.5, 0.8, 1.0),       # Blue (gripper jaw)
-            'jaw_right': (0.2, 0.5, 0.8, 1.0),      # Blue (gripper jaw)
-        }
-        
+        # Charger STL segments
         self.mesh_items = {}
-        for key in ['base', 'shoulder', 'forearm', 'wrist', 'jaw_left', 'jaw_right']:
-            md = MeshData(vertexes=self.raw_mesh[key]['verts'], faces=self.raw_mesh[key]['faces'])
-            item = GLMeshItem(
-                meshdata=md,
-                smooth=True,
-                shader='shaded',
-                drawEdges=False,
-                color=colors[key],
-                glOptions='opaque'
-            )
+        self.raw_mesh = {}
+
+        # Exemple fichiers STL : base, shoulder, forearm, wrist, jaw_left, jaw_right
+        stl_files = {
+            'base': "BS-KRA.stl",
+            'shoulder': "SH-KRA.stl",
+            'forearm': "FA-KRA.stl",
+            'wrist': "WR-KRA.stl",
+            'jaw_left': "JL-KRA.stl",
+            'jaw_right': "JR-KRA.stl"
+        }
+
+        colors = {
+            'base': (0.3,0.3,0.35,1.0),
+            'shoulder': (0.85,0.45,0.15,1.0),
+            'forearm': (0.75,0.4,0.12,1.0),
+            'wrist': (0.4,0.4,0.45,1.0),
+            'jaw_left': (0.2,0.5,0.8,1.0),
+            'jaw_right': (0.2,0.5,0.8,1.0)
+        }
+
+        for key, fname in stl_files.items():
+            path = os.path.join(STL_DIR, fname)
+            md = load_stl_mesh(path)
+            self.raw_mesh[key] = {
+                'verts': md.vertexes().copy(),
+                'faces': md.faces().copy()
+            }
+            item = GLMeshItem(meshdata=md, smooth=True, shader='shaded',
+                            drawEdges=False, color=colors[key], glOptions='opaque')
             self.view.addItem(item)
             self.mesh_items[key] = item
 
-        # joint markers
-        self.joints = GLScatterPlotItem(size=8, color=(1,1,0,1))
-        self.view.addItem(self.joints)
-
-        # initial update
+        # Update initial position
         self.update_3d_immediate(self.current_angles)
 
     def update_3d_immediate(self, angles_deg):
-        theta1, theta2, theta3, theta4, theta5 = [math.radians(a) for a in angles_deg]
+        """
+        Transform STL vertices selon les angles actuels des joints.
+        """
+        # Conversion en radians
+        theta1, theta2, theta3, theta4, theta5 = [np.radians(a) for a in angles_deg]
 
-        # Helper transforms (4x4 homogeneous matrices)
-        def RotX(a):
-            c, s = math.cos(a), math.sin(a)
-            return np.array([
-                [1, 0, 0, 0],
-                [0, c, -s, 0],
-                [0, s, c, 0],
-                [0, 0, 0, 1]
-            ], dtype=np.float64)
+        # Transformations homogènes
+        def rotz(t): c,s=np.cos(t),np.sin(t); return np.array([[c,-s,0,0],[s,c,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
+        def roty(t): c,s=np.cos(t),np.sin(t); return np.array([[c,0,s,0],[0,1,0,0],[-s,0,c,0],[0,0,0,1]],dtype=float)
+        def rotx(t): c,s=np.cos(t),np.sin(t); return np.array([[1,0,0,0],[0,c,-s,0],[0,s,c,0],[0,0,0,1]],dtype=float)
+        def tx(a): return np.array([[1,0,0,a],[0,1,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
+        def tz(a): return np.array([[1,0,0,0],[0,1,0,0],[0,0,1,a],[0,0,0,1]],dtype=float)
 
-        def RotY(a):
-            c, s = math.cos(a), math.sin(a)
-            return np.array([
-                [c, 0, s, 0],
-                [0, 1, 0, 0],
-                [-s, 0, c, 0],
-                [0, 0, 0, 1]
-            ], dtype=np.float64)
+        # Chain
+        F0 = np.eye(4)
+        F1 = F0 @ rotz(theta1) @ tz(LBASE)
+        F2 = F1 @ roty(theta2) @ tx(L1)
+        F3 = F2 @ roty(theta3) @ tx(L2)
+        F4 = F3 @ roty(theta4) @ tx(L3)
+        F5 = F4  # gripper
 
-        def RotZ(a):
-            c, s = math.cos(a), math.sin(a)
-            return np.array([
-                [c, -s, 0, 0],
-                [s, c, 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1]
-            ], dtype=np.float64)
-
-        def Tx(t):
-            return np.array([
-                [1, 0, 0, t],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1]
-            ], dtype=np.float64)
-
-        def Tz(t):
-            return np.array([
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, t],
-                [0, 0, 0, 1]
-            ], dtype=np.float64)
-
-        # Frame chain
-        F0 = np.eye(4)  # World frame
-
-        # J1: Rotation around Z (base)
-        F1 = F0 @ RotZ(theta1) @ Tz(LBASE)  # F1 est à la sortie de la base
-
-        # J2: Rotation around Y of F1's end (shoulder)
-        # F2 est placé à l'extrémité de L1 (épaule)
-        F2 = F1 @ RotY(theta2) @ Tx(L1)
-
-        # J3: Rotation around Y of F2's end (elbow)
-        # F3 est placé à l'extrémité de L2 (coude)
-        F3 = F2 @ RotY(theta3) @ Tx(L2)
-
-        # J4: Rotation around Y of F3's end (wrist)
-        # F4 est placé à l'extrémité de L3 (poignet)
-        F4 = F3 @ RotY(theta4) @ Tx(L3)
-
-        # Gripper frame
-        F5 = F4
-
-        # Mapping keys -> frames to use for transforming mesh vertices
-        # Each segment must include the rotation of its END joint to rotate correctly
         frames = {
-            'base': F0 @ RotY(-math.pi/2) @ Tx(LBASE / 2.0),  # Base mesh (vertical cylinder)
-            'shoulder': F1 @ RotY(theta2),  # Shoulder: starts at F1, rotates with theta2
-            'forearm': F2 @ RotY(theta3),   # Forearm: starts at F2, rotates with theta3
-            'wrist': F3 @ RotY(theta4),     # Wrist: starts at F3, rotates with theta4
-            'gripper': F4                    # Gripper mesh (attaché à F4)
+            'base': F0,
+            'shoulder': F1,
+            'forearm': F2,
+            'wrist': F3,
+            'jaw_left': F4,
+            'jaw_right': F4
         }
 
-        # Apply transforms to each mesh (inchangé)
+        # Déplacer jaws selon gripper_open
+        jaw_offset = 7.5 if self.gripper_open else 2.0
+        jaw_offsets = {'jaw_left': -jaw_offset, 'jaw_right': jaw_offset}
+
         for key, item in self.mesh_items.items():
-            raw = self.raw_mesh.get(key)
-            if raw is None:
-                continue
-            verts = raw['verts']  # Nx3
+            raw = self.raw_mesh[key]
+            verts = raw['verts']
             faces = raw['faces']
             n = verts.shape[0]
-            hom = np.ones((n, 4), dtype=np.float64)
-            hom[:, :3] = verts
+            hom = np.ones((n,4), dtype=np.float64)
+            hom[:,:3] = verts
             frame = frames.get(key, np.eye(4))
 
-            # Special handling for gripper jaws
-            if key in ['jaw_left', 'jaw_right']:
-                # Determine jaw offset based on gripper state
-                # Closed: ±2mm spacing (total 4mm gap)
-                # Open: ±7.5mm spacing (total 15mm gap)
-                offset_y = 7.5 if self.gripper_open else 2.0
-                
-                # Left jaw: negative Y offset, Right jaw: positive Y offset
-                if key == 'jaw_left':
-                    offset_y = -offset_y
-                
-                # Create transformation: translate along X (forward) and Y (lateral)
-                T_offset = np.eye(4)
-                T_offset[0, 3] = 10.0  # Forward offset along local X
-                T_offset[1, 3] = offset_y  # Lateral offset along local Y
-                
-                # Apply transformation - attach to F4 (end of wrist/L3)
-                final_frame = F4 @ T_offset
-                trans = (final_frame @ hom.T).T
-                verts_t = trans[:, :3].astype(np.float32)
+            if key in ['jaw_left','jaw_right']:
+                T_off = np.eye(4)
+                T_off[0,3] = 10.0
+                T_off[1,3] = jaw_offsets[key]
+                final = frame @ T_off
             else:
-                trans = (frame @ hom.T).T
-                verts_t = trans[:, :3].astype(np.float32)
+                final = frame
 
+            transformed = (final @ hom.T).T
+            verts_t = transformed[:,:3].astype(np.float32)
             md = MeshData(vertexes=verts_t, faces=faces)
             item.setMeshData(meshdata=md)
 
-        # Joint markers: show origins of F0..F4
-        joint_pts = np.array([
-            F0[:3, 3],  # Base origin
-            F1[:3, 3],  # J1's end (sortie de la base)
-            F2[:3, 3],  # J2's end (extrémité de L1)
-            F3[:3, 3],  # J3's end (extrémité de L2)
-            F4[:3, 3]   # J4's end (extrémité de L3)
-        ], dtype=np.float32)
-        self.joints.setData(pos=joint_pts, size=8, color=(1, 1, 0, 1))
-
-        # Effacer les anciens repères et étiquettes
-        for frame_items in self.local_frames:
-            for item in frame_items:
-                if item in self.view.items:
-                    self.view.removeItem(item)
-        self.local_frames = []
-
-        # Dessiner les nouveaux repères pour chaque articulation avec leurs noms
-        frames_list = [
-            (F1, "J1"),
-            (F2, "J2"),
-            (F3, "J3"),
-            (F4, "J4")
-        ]
-        for frame, name in frames_list:
-            frame_items = draw_local_frame(self.view, frame, name=name)
-            self.local_frames.append(frame_items)
-
-    # -----------------------
-    # Draw local frame axes
-    # -----------------------
-
-
+        # Joints markers
+        joint_pts = np.array([F0[:3,3], F1[:3,3], F2[:3,3], F3[:3,3], F4[:3,3]], dtype=np.float32)
+        self.joints.setData(pos=joint_pts, size=8, color=(1,1,0,1))
+    
     # -----------------------
     # Animation timer
     # -----------------------
