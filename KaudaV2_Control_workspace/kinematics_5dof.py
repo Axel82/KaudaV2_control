@@ -1,5 +1,7 @@
 # kinematics_5dof.py
 import numpy as np
+import math
+from config import *
 
 # -------------------------
 # Helpers: transforms
@@ -72,6 +74,43 @@ def forward_kinematics(thetas, links):
         pts.append(T[0:3,3].copy())
 
     return T, pts
+
+# ---------------------------
+# Inverse kinematics
+# ---------------------------
+def inverse_kinematics(x, y, z, tool_angle_deg=0.0, gripper_angle_deg=0.0):
+    """
+    Return angles [theta1, theta2, theta3, theta4, theta5] in degrees.
+    theta1: base azimuth (J1)
+    theta2: shoulder elevation (J2)
+    theta3: elbow (J3)
+    theta4: wrist rotation (J4)
+    theta5: gripper (J5)
+    """
+    # base
+    theta1 = math.degrees(math.atan2(y, x)) if (x != 0 or y != 0) else 0.0
+    # planar distance and vertical
+    r = math.hypot(x, y)
+    z_eff = z - LBASE  # consider base offset
+    # law of cosines for elbow
+    denom = 2 * L1 * L2
+    num = r*r + z_eff*z_eff - L1*L1 - L2*L2
+    cos_theta3 = num / denom
+    cos_theta3 = max(-1.0, min(1.0, cos_theta3))  # Clamp to avoid numerical errors
+    theta3_rad = math.acos(cos_theta3)
+    # choose elbow-down by default; to invert use -theta3_rad
+    k1 = L1 + L2 * math.cos(theta3_rad)
+    k2 = L2 * math.sin(theta3_rad)
+    theta2_rad = math.atan2(z_eff, r) - math.atan2(k2, k1)
+    theta_tool_rad = math.radians(tool_angle_deg)
+    theta4_rad = theta_tool_rad - theta2_rad - theta3_rad
+    return [
+        math.degrees(theta1),
+        math.degrees(theta2_rad),
+        math.degrees(theta3_rad),
+        math.degrees(theta4_rad),
+        float(gripper_angle_deg)
+    ]
 
 # -------------------------
 # Numeric Jacobian (position only)

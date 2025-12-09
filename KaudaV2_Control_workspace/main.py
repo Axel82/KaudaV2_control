@@ -35,43 +35,7 @@ from ui_components import ToggleSwitch, create_slider, create_joint_slider
 from theme import get_dark_palette, get_stylesheet
 from visualization_3d import make_cylinder, make_box, draw_local_frame
 from version import Version
-
-# ---------------------------
-# Inverse kinematics
-# ---------------------------
-def inverse_kinematics(x, y, z, tool_angle_deg=0.0, gripper_angle_deg=0.0):
-    """
-    Return angles [theta1, theta2, theta3, theta4, theta5] in degrees.
-    theta1: base azimuth (J1)
-    theta2: shoulder elevation (J2)
-    theta3: elbow (J3)
-    theta4: wrist rotation (J4)
-    theta5: gripper (J5)
-    """
-    # base
-    theta1 = math.degrees(math.atan2(y, x)) if (x != 0 or y != 0) else 0.0
-    # planar distance and vertical
-    r = math.hypot(x, y)
-    z_eff = z - LBASE  # consider base offset
-    # law of cosines for elbow
-    denom = 2 * L1 * L2
-    num = r*r + z_eff*z_eff - L1*L1 - L2*L2
-    cos_theta3 = num / denom
-    cos_theta3 = max(-1.0, min(1.0, cos_theta3))  # Clamp to avoid numerical errors
-    theta3_rad = math.acos(cos_theta3)
-    # choose elbow-down by default; to invert use -theta3_rad
-    k1 = L1 + L2 * math.cos(theta3_rad)
-    k2 = L2 * math.sin(theta3_rad)
-    theta2_rad = math.atan2(z_eff, r) - math.atan2(k2, k1)
-    theta_tool_rad = math.radians(tool_angle_deg)
-    theta4_rad = theta_tool_rad - theta2_rad - theta3_rad
-    return [
-        math.degrees(theta1),
-        math.degrees(theta2_rad),
-        math.degrees(theta3_rad),
-        math.degrees(theta4_rad),
-        float(gripper_angle_deg)
-    ]
+from kinematics_5dof import inverse_kinematics, forward_kinematics, deg2rad
 
 # ---------------------------
 # Main Application
@@ -453,19 +417,41 @@ class KAudaApp(QWidget):
         self.log("Teach Origin envoyé (home)")
 
     def on_angular_joint_slider_changed(self):
-        """
-        Preview the robot pose using the joint-slider angles (no IK).
-        This updates the 3D display by converting the joint sliders directly into the model frames.
-        """
-        a1 = float(self.slider_j1.value())
-        a2 = float(self.slider_j2.value())
-        a3 = float(self.slider_j3.value())
-        a4 = float(self.slider_j4.value())
-        a5 = float(self.slider_j5.value())
-        # Set target angles for animation preview (so the animation interpolates toward this pose)
-        self.target_angles = [a1, a2, a3, a4, a5]
-        # Update 3D immediately for instant feedback (preview)
+        # Lire angles articulaires
+        angles_deg = [
+            self.slider_j1.value(),
+            self.slider_j2.value(),
+            self.slider_j3.value(),
+            self.slider_j4.value(),
+            self.slider_j5.value()
+        ]
+        angles_rad = deg2rad(angles_deg)  # Convertir en radians pour FK
+
+        # Mettre à jour la 3D
+        self.target_angles = angles_deg
         self.update_3d_immediate(self.target_angles)
+
+        # FK pour récupérer la position finale du gripper
+        links = [LBASE, L1, L2, L3, 0.0]  # Rappel: L5 pour la pince, ici zéro si tu ne l'utilises pas
+        T, pts = forward_kinematics(angles_rad, links)
+        x, y, z = pts[-1]  # Position finale du gripper
+
+        # Optionnel: prendre aussi les angles tool et grip
+        tool = angles_deg[3]  # J4
+        grip = angles_deg[4]  # J5
+
+        # Bloquer signaux pour éviter boucle infinie
+        for s in [self.slider_x, self.slider_y, self.slider_z, self.slider_tool, self.slider_grip]:
+            s.blockSignals(True)
+
+        self.slider_x.setValue(int(round(x)))
+        self.slider_y.setValue(int(round(y)))
+        self.slider_z.setValue(int(round(z)))
+        self.slider_tool.setValue(int(round(tool)))
+        self.slider_grip.setValue(int(round(grip)))
+
+        for s in [self.slider_x, self.slider_y, self.slider_z, self.slider_tool, self.slider_grip]:
+            s.blockSignals(False)
 
     def send_angles_to_arduino(self, angles):
         if self.serial is None or not (hasattr(self.serial, 'is_open') and self.serial.is_open):
