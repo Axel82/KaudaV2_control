@@ -560,21 +560,21 @@ class KAudaApp(QWidget):
 
         # Exemple fichiers STL : base, shoulder, forearm, wrist, jaw_left, jaw_right
         stl_files = {
-            'base': "BS-KRA.stl",
-            'shoulder': "SH-KRA.stl",
-            'forearm': "FA-KRA.stl",
-            'wrist': "WR-KRA.stl",
-            'jaw_left': "JL-KRA.stl",
-            'jaw_right': "JR-KRA.stl"
+            'base': "Base.stl",
+            'shoulder': "Segment_1.stl",
+            'forearm': "Segment_2.stl",
+            'wrist': "Segment_3.stl",
+            'jaw_left': "Segment_4.stl",
+            'jaw_right': "Segment_5.stl"
         }
 
         colors = {
-            'base': (0.3,0.3,0.35,1.0),
-            'shoulder': (0.85,0.45,0.15,1.0),
-            'forearm': (0.75,0.4,0.12,1.0),
-            'wrist': (0.4,0.4,0.45,1.0),
-            'jaw_left': (0.2,0.5,0.8,1.0),
-            'jaw_right': (0.2,0.5,0.8,1.0)
+            'base': (0.95, 0.95, 0.95, 1.0),    # Blanc légèrement grisâtre
+            'shoulder': (0.98, 0.98, 0.98, 1.0), # Blanc très clair
+            'forearm': (0.97, 0.97, 0.97, 1.0),  # Blanc clair
+            'wrist': (0.93, 0.93, 0.93, 1.0),    # Blanc grisâtre
+            'jaw_left': (0.99, 0.99, 0.99, 1.0), # Blanc pur
+            'jaw_right': (0.99, 0.99, 0.99, 1.0) # Blanc pur
         }
 
         for key, fname in stl_files.items():
