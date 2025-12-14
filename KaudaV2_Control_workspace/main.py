@@ -565,7 +565,7 @@ class KAudaApp(QWidget):
             'forearm': "Segment_2.stl",
             'wrist': "Segment_3.stl",
             'jaw_left': "Segment_4.stl",
-            'jaw_right': "Segment_5.stl"
+            'jaw_right': "Gripper_I.stl"
         }
 
         colors = {
