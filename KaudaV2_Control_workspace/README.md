@@ -2,6 +2,9 @@
 
 Application de contrôle pour bras robotique KaudaV2 à 5 axes avec interface graphique PyQt5 et visualisation 3D en temps réel.
 
+Projet initialement développé par :
+[Kauda Project](https://www.diy-tech.it/010-kauda)
+
 ## Caractéristiques
 
 ### Interface Utilisateur
