@@ -8,47 +8,48 @@ All physical parameters and limits for the 5-axis robotic arm
 # ============================================================================
 
 # Segment lengths
-L1 = 120.0      # Shoulder to elbow
-L2 = 100.0      # Elbow to wrist
-L3 = 80.0       # Wrist to tool (effector)
-LBASE = 20.0    # Base height
+LBASE = 75.0    # Base height
+L1 = 80.0      # Segment 1 length
+L2 = 190.0      # Segment 2 length
+L3 = 140.0       # Segment 3 length
+L4 = 35.0       # Segment 4 length
 RADIUS = 10.0   # Base radius for visualization cylinders
 
 # ============================================================================
 # JOINT LIMITS - Angular limits (degrees)
 # ============================================================================
 
-# Joint 1: Base (azimuthal rotation)
+# Joint 1: Base (azimuthal rotation Rz)
 J1_MIN = -165
 J1_MAX = 165
 
-# Joint 2: Shoulder (elevation)
+# Joint 2: Segment 1 (Rx)
 J2_MIN = -100
 J2_MAX = 120
 
-# Joint 3: Elbow
+# Joint 3: Segment 2 (Rx)
 J3_MIN = -60
 J3_MAX = 150
 
-# Joint 4: Wrist (rotation)
+# Joint 4: Segment 3 (Ry)
 J4_MIN = -175
 J4_MAX = 175
 
-# Joint 5: Gripper (rotation)
-J5_MIN = -30
-J5_MAX = 130
+# Joint 5: Segment 4 (Rx)
+J5_MIN = -180 # Increased range for tool rotation
+J5_MAX = 180
 
 # ============================================================================
 # CARTESIAN WORKSPACE - Position limits (mm) and tool angles (degrees)
 # ============================================================================
 
 # Position limits
-X_MIN = -250
-X_MAX = 250
-Y_MIN = -250
-Y_MAX = 250
+X_MIN = -400
+X_MAX = 400
+Y_MIN = -400
+Y_MAX = 400
 Z_MIN = 0
-Z_MAX = 350
+Z_MAX = 600
 
 # Tool and gripper angles
 GRIP_MIN = -90
@@ -76,11 +77,11 @@ JAW_FORWARD_OFFSET = 10.0   # Forward offset from wrist end
 
 # Rotation axes for each joint (for forward kinematics)
 # Format: ['axis1', 'axis2', 'axis3', 'axis4', 'axis5']
-JOINT_AXES = ['z', 'y', 'y', 'y', 'x']
+JOINT_AXES = ['z', 'x', 'x', 'y', 'x']
 
 # Home position (default safe position)
 # Format: [J1, J2, J3, J4, J5] in degrees
-HOME_ANGULAR_POSITION = [0, -90, 0, 0, 0]
+HOME_ANGULAR_POSITION = [0, 0, 0, 0, 0]
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -108,7 +109,7 @@ def get_segment_length(segment_num):
     """
     Get the length of a specific segment
     Args:
-        segment_num: Segment number (0=base, 1-3=links)
+        segment_num: Segment number (0=base, 1-4=links)
     Returns:
         float: Length in mm
     """
@@ -117,6 +118,7 @@ def get_segment_length(segment_num):
         1: L1,
         2: L2,
         3: L3,
+        4: L4,
     }
     return lengths.get(segment_num, 0.0)
 

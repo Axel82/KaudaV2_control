@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel,
     QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QTabWidget
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 import pyqtgraph.opengl as gl
 from pyqtgraph.opengl import MeshData, GLMeshItem, GLGridItem, GLScatterPlotItem
 
@@ -39,6 +39,126 @@ from kinematics_5dof import inverse_kinematics, forward_kinematics, deg2rad
 from stl_mesh import load_stl_mesh
 
 STL_DIR = os.path.join(os.path.dirname(__file__), "STL")
+
+# ---------------------------
+# Worker Thread for Animation
+# ---------------------------
+class AnimationWorker(QThread):
+    # Sends dictionary of matrices and list of joint positions
+    frame_ready = pyqtSignal(dict)
+    
+    def __init__(self, start_angles):
+        super().__init__()
+        self.current_angles = list(start_angles)
+        self.target_angles = list(start_angles)
+        self.gripper_open = False
+        self.running = True
+        self.mutex = QThread.currentThread() # Simple protection if needed, but python GIL helps
+
+    def set_target(self, angles, immediate=False):
+        self.target_angles = list(angles)
+        if immediate:
+            self.current_angles = list(angles)
+
+    def set_gripper(self, is_open):
+        self.gripper_open = is_open
+
+    def stop(self):
+        self.running = False
+
+    def run(self):
+        while self.running:
+            # 1. Animation Step
+            stepped = False
+            for i in range(len(self.current_angles)):
+                cur = self.current_angles[i]
+                tgt = self.target_angles[i]
+                delta = tgt - cur
+                
+                # Interpolation logic
+                if abs(delta) > 0.03:
+                    step = np.sign(delta) * max(0.2, abs(delta) * 0.18)
+                    if abs(step) > abs(delta):
+                        step = delta
+                    self.current_angles[i] = cur + step
+                    stepped = True
+                else:
+                    self.current_angles[i] = tgt
+            
+            # 2. Compute Transform Matrices (Kinematics)
+            # Even if not stepped, we might need to update if gripper changed
+            # But to save CPU, we could check if needs_update
+            # For simplicity, we run at 30fps
+            
+            data = self.compute_matrices(self.current_angles)
+            data['current_angles'] = self.current_angles
+            self.frame_ready.emit(data)
+            
+            self.msleep(30) # ~33 FPS
+
+    def compute_matrices(self, angles_deg):
+        theta1, theta2, theta3, theta4, theta5 = [np.radians(a) for a in angles_deg]
+
+        # Transformations homogènes
+        def rotz(t): c,s=np.cos(t),np.sin(t); return np.array([[c,-s,0,0],[s,c,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
+        def roty(t): c,s=np.cos(t),np.sin(t); return np.array([[c,0,s,0],[0,1,0,0],[-s,0,c,0],[0,0,0,1]],dtype=float)
+        def rotx(t): c,s=np.cos(t),np.sin(t); return np.array([[1,0,0,0],[0,c,-s,0],[0,s,c,0],[0,0,0,1]],dtype=float)
+        def tx(a): return np.array([[1,0,0,a],[0,1,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
+        def tz(a): return np.array([[1,0,0,0],[0,1,0,0],[0,0,1,a],[0,0,0,1]],dtype=float)
+
+        # F0 = Base Frame (Identity)
+        F0 = np.eye(4)
+        
+        # Link 1 (Base): Rotate Z (J1), Translate Z (LBASE)
+        F1 = F0 @ rotz(theta1) @ tz(LBASE)
+        
+        # Link 2 (Segment 1): Rotate X (J2), Translate Z (L1)
+        F2 = F1 @ rotx(theta2) @ tz(L1)
+        
+        # Link 3 (Segment 2): Rotate X (J3), Translate Z (L2)
+        F3 = F2 @ rotx(theta3) @ tz(L2)
+        
+        # Link 4 (Segment 3): Rotate Y (J4), Translate Z (L3)
+        F4 = F3 @ roty(theta4) @ tz(L3)
+        
+        # Link 5 (Segment 4): Rotate X (J5), Translate Z (L4)
+        F5 = F4 @ rotx(theta5) @ tz(L4)
+
+        matrices = {
+            'base': F0.T,      # OpenGL uses column-major usually, but setTransform might accept row-major numpy?
+                               # PyQtGraph setTransform: "If a 4x4 array, it must be row-major."
+                               # Numpy defaults to row-major. So passing F0 is correct. 
+                               # Wait, F0 @ point is standard math. OpenGL needs Column-Major if passing to shader?
+                               # PyQtGraph docs say: "tr must be ... 4x4 numpy array (row-major)"
+                               # If I have standard math matrix M where v' = M v
+                               # The argument to setTransform should be M.
+            'segment1': F1,
+            'segment2': F2,
+            'segment3': F3,
+            'segment4': F4,
+            'gripperInterface': F5, 
+        }
+
+        # Jaws
+        jaw_offset = 7.5 if self.gripper_open else 2.0
+        # Jaw Left
+        T_off_L = np.eye(4)
+        T_off_L[0,3] = 10.0
+        T_off_L[1,3] = -jaw_offset
+        matrices['jaw_left'] = F5 @ T_off_L
+        
+        # Jaw Right
+        T_off_R = np.eye(4)
+        T_off_R[0,3] = 10.0
+        T_off_R[1,3] = jaw_offset
+        matrices['jaw_right'] = F5 @ T_off_R
+
+        # Joints markers positions
+        joint_pts = [
+            F0[:3,3], F1[:3,3], F2[:3,3], F3[:3,3], F4[:3,3], F5[:3,3]
+        ]
+
+        return {'matrices': matrices, 'joints': joint_pts}
 
 # ---------------------------
 # Main Application
@@ -64,7 +184,7 @@ class KAudaApp(QWidget):
         self._build_ui()
         self._build_3d()
         self._apply_theme()
-        self._build_timers()
+        self._start_worker()
         self._set_icon()
 
     def _set_icon(self):
@@ -393,8 +513,11 @@ class KAudaApp(QWidget):
         grip = self.slider_grip.value()
         tool = self.slider_tool.value()
         angles = inverse_kinematics(x, y, z, tool, grip)
-        self.target_angles = angles  # preview target
-        self.update_3d_immediate(angles)
+        angles = inverse_kinematics(x, y, z, tool, grip)
+        # Cartesian update -> sets target for smooth animation (or immediate if dragging?)
+        # Let's use smooth for Cartesian inverse kinematics as it jumps a lot otherwise
+        if hasattr(self, 'worker'):
+            self.worker.set_target(angles, immediate=True) # Immediate for responsive sliders
 
     def on_send_position(self):
         if self.serial is None or not (hasattr(self.serial, 'is_open') and self.serial.is_open):
@@ -407,7 +530,9 @@ class KAudaApp(QWidget):
         tool = self.slider_tool.value()
         angles = inverse_kinematics(x, y, z, tool, grip)
         self.log(f"Calcul IK -> angles: {['{:.2f}'.format(a) for a in angles]}")
-        self.target_angles = angles
+        # Update worker target for consistency
+        if hasattr(self, 'worker'):
+            self.worker.set_target(angles)
         self.send_angles_to_arduino(angles)
 
     def on_teach_origin(self):
@@ -415,7 +540,8 @@ class KAudaApp(QWidget):
             self.log("Arduino non connecté. Usage: Connect.")
             return
         home_angles = [0.0, 0.0, 0.0, 0.0, 0.0]
-        self.target_angles = home_angles
+        if hasattr(self, 'worker'):
+            self.worker.set_target(home_angles)
         self.send_angles_to_arduino(home_angles)
         self.log("Teach Origin envoyé (home)")
 
@@ -431,18 +557,21 @@ class KAudaApp(QWidget):
         angles_rad = deg2rad(angles_deg)  # Convertir en radians pour FK
 
         # Mettre à jour la 3D
+        # Mettre à jour la 3D via worker
+        # Joint sliders -> Immediate preview
         self.target_angles = angles_deg
-        self.update_3d_immediate(self.target_angles)
+        if hasattr(self, 'worker'):
+            self.worker.set_target(angles_deg, immediate=True)
 
         # FK pour récupérer la position finale du gripper
-        links = [LBASE, L1, L2, L3, 0.0]  # Rappel: L5 pour la pince, ici zéro si tu ne l'utilises pas
+        links = [LBASE, L1, L2, L3, L4]  
         T, pts = forward_kinematics(angles_rad, links)
         x, y, z = pts[-1]  # Position finale du gripper
 
         # Optionnel: prendre aussi les angles tool et grip
-        tool = angles_deg[3]  # J4
-        grip = angles_deg[4]  # J5
-
+        # Avec la nouvelle configuration, Tool est J5 (si utilisé comme rotation)
+        # Grip peut être visuel ou J5.
+        
         # Bloquer signaux pour éviter boucle infinie
         for s in [self.slider_x, self.slider_y, self.slider_z, self.slider_tool, self.slider_grip]:
             s.blockSignals(True)
@@ -450,8 +579,9 @@ class KAudaApp(QWidget):
         self.slider_x.setValue(int(round(x)))
         self.slider_y.setValue(int(round(y)))
         self.slider_z.setValue(int(round(z)))
-        self.slider_tool.setValue(int(round(tool)))
-        self.slider_grip.setValue(int(round(grip)))
+        # Map angles to tool/grip logic if needed
+        # self.slider_tool.setValue(int(round(tool))) 
+        # self.slider_grip.setValue(int(round(grip)))
 
         for s in [self.slider_x, self.slider_y, self.slider_z, self.slider_tool, self.slider_grip]:
             s.blockSignals(False)
@@ -499,7 +629,9 @@ class KAudaApp(QWidget):
         self.slider_j5.setValue(home[4])
 
         # 2) Mise à jour de la 3D
-        self.update_3d_immediate(home)
+        # 2) Mise à jour de la 3D via worker
+        if hasattr(self, 'worker'):
+            self.worker.set_target(home)
 
         # 3) Envoi série
         if self.serial and self.serial.is_open:
@@ -516,7 +648,9 @@ class KAudaApp(QWidget):
         self.gripper_open = checked
         
         # Refresh 3D visualization to show jaw movement
-        self.update_3d_immediate(self.current_angles)
+        # Refresh 3D visualization via worker
+        if hasattr(self, 'worker'):
+            self.worker.set_gripper(checked)
         
         # Send serial command
         if not self.serial or not self.serial.isOpen():
@@ -556,131 +690,75 @@ class KAudaApp(QWidget):
 
         # Charger STL segments
         self.mesh_items = {}
-        self.raw_mesh = {}
+        # self.raw_mesh n'est plus nécessaire car on utilise setTransform
+        # self.raw_mesh = {} 
 
         # Exemple fichiers STL : base, shoulder, forearm, wrist, jaw_left, jaw_right
+        # Updated mapping for new segments:
         stl_files = {
             'base': "Base.stl",
-            'shoulder': "Segment_1.stl",
-            'forearm': "Segment_2.stl",
-            'wrist': "Segment_3.stl",
-            'jaw_left': "Segment_4.stl",
-            'jaw_right': "Gripper_I.stl"
+            'segment1': "Segment_1.stl",
+            'segment2': "Segment_2.stl",
+            'segment3': "Segment_3.stl",
+            'segment4': "Segment_4.stl",
+            'segment5': "Segment_5.stl"
         }
 
         colors = {
             'base': (0.95, 0.95, 0.95, 1.0),    # Blanc légèrement grisâtre
-            'shoulder': (0.98, 0.98, 0.98, 1.0), # Blanc très clair
-            'forearm': (0.97, 0.97, 0.97, 1.0),  # Blanc clair
-            'wrist': (0.93, 0.93, 0.93, 1.0),    # Blanc grisâtre
-            'jaw_left': (0.99, 0.99, 0.99, 1.0), # Blanc pur
-            'jaw_right': (0.99, 0.99, 0.99, 1.0) # Blanc pur
+            'segment1': (0.98, 0.98, 0.98, 1.0), # Blanc très clair
+            'segment2': (0.97, 0.97, 0.97, 1.0),  # Blanc clair
+            'segment3': (0.93, 0.93, 0.93, 1.0),    # Blanc grisâtre
+            'segment4': (0.99, 0.99, 0.99, 1.0), # Blanc pur
+            'segment5': (0.99, 0.99, 0.99, 1.0) # Blanc pur
         }
 
         for key, fname in stl_files.items():
             path = os.path.join(STL_DIR, fname)
             md = load_stl_mesh(path)
-            self.raw_mesh[key] = {
-                'verts': md.vertexes().copy(),
-                'faces': md.faces().copy()
-            }
+            # On charge le mesh tel quel, on le bougera avec setTransform
             item = GLMeshItem(meshdata=md, smooth=True, shader='shaded',
                             drawEdges=False, color=colors[key], glOptions='opaque')
             self.view.addItem(item)
             self.mesh_items[key] = item
 
-        # Update initial position
-        self.update_3d_immediate(self.current_angles)
-
-    def update_3d_immediate(self, angles_deg):
+    # Callback reçu du thread via signal
+    def _on_worker_frame(self, data):
         """
-        Transform STL vertices selon les angles actuels des joints.
+        data contient:
+         - 'matrices': dict { part_name: QMatrix4x4 }
+         - 'joints': list of (x,y,z) for joint markers
+         - 'current_angles': list of float
         """
-        # Conversion en radians
-        theta1, theta2, theta3, theta4, theta5 = [np.radians(a) for a in angles_deg]
+        matrices = data.get('matrices', {})
+        joint_pts = data.get('joints', [])
+        
+        # Mise à jour des matrices de transformation (GPU)
+        for key, mat in matrices.items():
+            if key in self.mesh_items:
+                self.mesh_items[key].setTransform(mat)
+        
+        # Mise à jour des marqueurs de joints
+        if joint_pts:
+            self.joints.setData(pos=np.array(joint_pts), size=8, color=(1,1,0,1))
 
-        # Transformations homogènes
-        def rotz(t): c,s=np.cos(t),np.sin(t); return np.array([[c,-s,0,0],[s,c,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
-        def roty(t): c,s=np.cos(t),np.sin(t); return np.array([[c,0,s,0],[0,1,0,0],[-s,0,c,0],[0,0,0,1]],dtype=float)
-        def rotx(t): c,s=np.cos(t),np.sin(t); return np.array([[1,0,0,0],[0,c,-s,0],[0,s,c,0],[0,0,0,1]],dtype=float)
-        def tx(a): return np.array([[1,0,0,a],[0,1,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
-        def tz(a): return np.array([[1,0,0,0],[0,1,0,0],[0,0,1,a],[0,0,0,1]],dtype=float)
-
-        # Chain
-        F0 = np.eye(4)
-        F1 = F0 @ rotz(theta1) @ tz(LBASE)
-        F2 = F1 @ roty(theta2) @ tx(L1)
-        F3 = F2 @ roty(theta3) @ tx(L2)
-        F4 = F3 @ roty(theta4) @ tx(L3)
-        F5 = F4  # gripper
-
-        frames = {
-            'base': F0,
-            'shoulder': F1,
-            'forearm': F2,
-            'wrist': F3,
-            'jaw_left': F4,
-            'jaw_right': F4
-        }
-
-        # Déplacer jaws selon gripper_open
-        jaw_offset = 7.5 if self.gripper_open else 2.0
-        jaw_offsets = {'jaw_left': -jaw_offset, 'jaw_right': jaw_offset}
-
-        for key, item in self.mesh_items.items():
-            raw = self.raw_mesh[key]
-            verts = raw['verts']
-            faces = raw['faces']
-            n = verts.shape[0]
-            hom = np.ones((n,4), dtype=np.float64)
-            hom[:,:3] = verts
-            frame = frames.get(key, np.eye(4))
-
-            if key in ['jaw_left','jaw_right']:
-                T_off = np.eye(4)
-                T_off[0,3] = 10.0
-                T_off[1,3] = jaw_offsets[key]
-                final = frame @ T_off
-            else:
-                final = frame
-
-            transformed = (final @ hom.T).T
-            verts_t = transformed[:,:3].astype(np.float32)
-            md = MeshData(vertexes=verts_t, faces=faces)
-            item.setMeshData(meshdata=md)
-
-        # Joints markers
-        joint_pts = np.array([F0[:3,3], F1[:3,3], F2[:3,3], F3[:3,3], F4[:3,3]], dtype=np.float32)
-        self.joints.setData(pos=joint_pts, size=8, color=(1,1,0,1))
-    
-    # -----------------------
-    # Animation timer
-    # -----------------------
-    def _build_timers(self):
-        self.anim_timer = QTimer()
-        self.anim_timer.setInterval(30)
-        self.anim_timer.timeout.connect(self._animate_step)
-        self.anim_timer.start()
-
-    def _animate_step(self):
-        stepped = False
-        for i in range(len(self.current_angles)):
-            cur = self.current_angles[i]
-            tgt = self.target_angles[i]
-            delta = tgt - cur
-            if abs(delta) > 0.03:
-                step = np.sign(delta) * max(0.2, abs(delta) * 0.18)
-                if abs(step) > abs(delta):
-                    step = delta
-                self.current_angles[i] = cur + step
-                stepped = True
-        if stepped:
-            self.update_3d_immediate(self.current_angles)
+        # Update local current_angles for consistency
+        self.current_angles = data.get('current_angles', self.current_angles)
 
     # -----------------------
-    # Clean up
+    # Animation timer (REMPLACÉ PAR THREAD)
     # -----------------------
+    def _start_worker(self):
+        self.worker = AnimationWorker(self.current_angles)
+        self.worker.frame_ready.connect(self._on_worker_frame)
+        self.worker.start()
+
     def closeEvent(self, event):
+        # Stop worker
+        if hasattr(self, 'worker'):
+            self.worker.stop()
+            self.worker.wait()
+
         if self.reader and self.reader.isRunning():
             self.reader.stop()
         if self.serial and hasattr(self.serial, 'is_open') and self.serial.is_open:
