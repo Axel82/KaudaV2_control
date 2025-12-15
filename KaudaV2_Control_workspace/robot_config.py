@@ -77,7 +77,7 @@ JAW_FORWARD_OFFSET = 10.0   # Forward offset from wrist end
 
 # Rotation axes for each joint (for forward kinematics)
 # Format: ['axis1', 'axis2', 'axis3', 'axis4', 'axis5']
-JOINT_AXES = ['z', 'x', 'x', 'y', 'x']
+JOINT_AXES = ['z', 'y', 'y', 'x', 'y']
 
 # Home position (default safe position)
 # Format: [J1, J2, J3, J4, J5] in degrees

@@ -110,19 +110,20 @@ class AnimationWorker(QThread):
         F0 = np.eye(4)
         
         # Link 1 (Base): Rotate Z (J1), Translate Z (LBASE)
-        F1 = F0 @ rotz(theta1) @ tz(LBASE)
+       F1 = F0 @ rotz(theta1) @ tz(LBASE)
         
-        # Link 2 (Segment 1): Rotate X (J2), Translate Z (L1)
-        F2 = F1 @ rotx(theta2) @ tz(L1)
+        # Link 2 (Segment 1): Rotate Y (J2), Translate Z (L1)
+        # Axis 2: Y (was X)
+        F2 = F1 @ roty(theta2) @ tz(L1)
         
-        # Link 3 (Segment 2): Rotate X (J3), Translate Z (L2)
-        F3 = F2 @ rotx(theta3) @ tz(L2)
+        # Link 3 (Segment 2): Rotate Y (J3), Translate Z (L2)
+        F3 = F2 @ roty(theta3) @ tz(L2)
         
-        # Link 4 (Segment 3): Rotate Y (J4), Translate Z (L3)
-        F4 = F3 @ roty(theta4) @ tz(L3)
+        # Link 4 (Segment 3): Rotate X (J4), Translate Z (L3)
+        F4 = F3 @ rotx(theta4) @ tz(L3)
         
-        # Link 5 (Segment 4): Rotate X (J5), Translate Z (L4)
-        F5 = F4 @ rotx(theta5) @ tz(L4)
+        # Link 5 (Segment 4): Rotate Y (J5), Translate Z (L4)
+        F5 = F4 @ roty(theta5) @ tz(L4)
 
         matrices = {
             'base': F0.T,      # OpenGL uses column-major usually, but setTransform might accept row-major numpy?
