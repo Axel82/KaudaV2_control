@@ -22,7 +22,7 @@ import ctypes
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel,
-    QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QTabWidget
+    QSlider, QTextEdit, QComboBox, QGroupBox, QGridLayout, QTabWidget, QFrame
 )
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 import pyqtgraph.opengl as gl
@@ -722,6 +722,68 @@ class KAudaApp(QWidget):
                             drawEdges=False, color=colors[key], glOptions='opaque')
             self.view.addItem(item)
             self.mesh_items[key] = item
+
+        # --- Overlay Camera Reset Button ---
+        # Container for the button (optional, but good for styling/bg)
+        self.cam_overlay = QFrame(self.view)
+        self.cam_overlay.setStyleSheet("background-color: transparent;")
+        
+        # Determine fixed size or let layout handle it. 
+        # Here we just put a button in a layout or absolute. 
+        # Absolute positioning relative to self.view is easiest for "top-right".
+        
+        self.btn_reset_cam = QPushButton("Reset View", self.cam_overlay)
+        # Style: semi-transparent white, black text
+        self.btn_reset_cam.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 150);
+                color: black;
+                border: 1px solid #555;
+                border-radius: 5px;
+                padding: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 200);
+            }
+        """)
+        self.btn_reset_cam.clicked.connect(self.reset_camera_view)
+        self.btn_reset_cam.setCursor(Qt.PointingHandCursor)
+        self.btn_reset_cam.adjustSize()
+        
+        # Monkey-patch resizeEvent to keep button in top-right
+        original_resize = self.view.resizeEvent
+
+        def new_resize_event(event):
+            original_resize(event)
+            # Position at top-right, with some margin
+            margin = 10
+            # Width of self.view
+            vw = self.view.width()
+            # Dimensions of button
+            bw = self.btn_reset_cam.width()
+            bh = self.btn_reset_cam.height()
+            
+            x = vw - bw - margin
+            y = margin
+            
+            self.cam_overlay.setGeometry(x, y, bw, bh)
+            self.btn_reset_cam.move(0,0) # Button at (0,0) of overlay
+
+        self.view.resizeEvent = new_resize_event
+        
+        # Initial position update
+        self.cam_overlay.resize(self.btn_reset_cam.size()) 
+        # (resizeEvent will be called when shown, but let's ensure it's placed if already shown)
+
+    def reset_camera_view(self):
+        """Reset the 3D camera to its default position."""
+        # Defaults used in __init__: distance=800
+        # pyqtgraph defaults are typically elevation=30, azimuth=45
+        self.view.setCameraPosition(distance=800, elevation=30, azimuth=45)
+        # Reset pan (center)
+        self.view.opts['center'] = QtGui.QVector3D(0, 0, 0) # Re-centers on origin
+
 
     # Callback reçu du thread via signal
     def _on_worker_frame(self, data):
