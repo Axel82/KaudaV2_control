@@ -110,7 +110,7 @@ class AnimationWorker(QThread):
         F0 = np.eye(4)
         
         # Link 1 (Base): Rotate Z (J1), Translate Z (LBASE)
-       F1 = F0 @ rotz(theta1) @ tz(LBASE)
+        F1 = F0 @ rotz(theta1) @ tz(LBASE)
         
         # Link 2 (Segment 1): Rotate Y (J2), Translate Z (L1)
         # Axis 2: Y (was X)
@@ -682,7 +682,7 @@ class KAudaApp(QWidget):
         self.view.addItem(g)
         
         # Set background color for better contrast
-        self.view.setBackgroundColor((25, 25, 30))
+        self.view.setBackgroundColor((50, 45, 45))
 
         # Joints markers
         self.joints = GLScatterPlotItem(size=8, color=(1,1,0,1))
@@ -706,12 +706,12 @@ class KAudaApp(QWidget):
         }
 
         colors = {
-            'base': (0.95, 0.95, 0.95, 1.0),    # Blanc légèrement grisâtre
-            'segment1': (0.98, 0.98, 0.98, 1.0), # Blanc très clair
-            'segment2': (0.97, 0.97, 0.97, 1.0),  # Blanc clair
-            'segment3': (0.93, 0.93, 0.93, 1.0),    # Blanc grisâtre
-            'segment4': (0.99, 0.99, 0.99, 1.0), # Blanc pur
-            'segment5': (0.99, 0.99, 0.99, 1.0) # Blanc pur
+            'base': (0.8, 0.6, 0.45, 1.0),      # Gris chaud très sombre
+            'segment1': (0.8, 0.6, 0.45, 1.0),  # Gris-orange pâle
+            'segment2': (0.8, 0.6, 0.45, 1.0),  # Gris-orange moyen
+            'segment3': (0.8, 0.6, 0.45, 1.0), # Gris-orange clair
+            'segment4': (0.8, 0.6, 0.45, 1.0),  # Orange doux
+            'segment5': (0.8, 0.6, 0.45, 1.0)  # Orange pâle
         }
 
         for key, fname in stl_files.items():
