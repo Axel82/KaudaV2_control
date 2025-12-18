@@ -119,8 +119,8 @@ class AnimationWorker(QThread):
         # Link 3 (Segment 2): Rotate Y (J3), Translate Z (L2)
         F3 = F2 @ roty(theta3) @ tz(L2)
         
-        # Link 4 (Segment 3): Rotate X (J4), Translate Z (L3)
-        F4 = F3 @ rotx(theta4) @ tz(L3)
+        # Link 4 (Segment 3): Rotate Z (J4), Translate Z (L3)
+        F4 = F3 @ rotz(theta4) @ tz(L3)
         
         # Link 5 (Segment 4): Rotate Y (J5), Translate Z (L4)
         F5 = F4 @ roty(theta5) @ tz(L4)
