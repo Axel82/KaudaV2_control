@@ -15,10 +15,11 @@ ANIMATION_INTERVAL_MS = 30
 # Import all robot-specific constants from robot_config
 from robot_config import (
     # Geometry
-    L1, L2, L3, L4, LBASE, RADIUS,
+    L1, L2, L3, L4, L5, LBASE, RADIUS,
     # Joint limits
     J1_MIN, J1_MAX, J2_MIN, J2_MAX, J3_MIN, J3_MAX,
     J4_MIN, J4_MAX, J5_MIN, J5_MAX,
+    J6_MIN, J6_MAX,
     # Cartesian workspace
     X_MIN, X_MAX, Y_MIN, Y_MAX, Z_MIN, Z_MAX,
     GRIP_MIN, GRIP_MAX, TOOL_MIN, TOOL_MAX,

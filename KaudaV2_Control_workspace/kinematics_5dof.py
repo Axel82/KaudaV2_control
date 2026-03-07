@@ -58,8 +58,8 @@ def forward_kinematics(thetas, links, axes=None):
       Assumption: Robot is a vertical stack (Snake-like) or segments defined along Z.
       This ensures Rx/Ry rotations provide Pitch/Yaw deflection from vertical.
     """
-    if len(thetas) != 5 or len(links) != 5:
-        raise ValueError("Require 5 thetas and 5 links")
+    if len(thetas) != len(links):
+        raise ValueError("Require same number of thetas and links")
 
     if axes is None:
         axes = JOINT_AXES
@@ -67,7 +67,7 @@ def forward_kinematics(thetas, links, axes=None):
     T = np.eye(4)
     pts = [T[0:3,3].copy()]  # p0
 
-    for i in range(5):
+    for i in range(len(thetas)):
         th = thetas[i]
         L = links[i]
         axis = axes[i]
@@ -129,7 +129,7 @@ def ik_jacobian_transpose(target_pos, thetas0, links, axes=None,
     
     # joint limits in radians
     limits_rad = []
-    for i in range(1, 6):
+    for i in range(1, len(thetas) + 1):
         mn, mx = get_joint_limits(i)
         limits_rad.append((math.radians(mn), math.radians(mx)))
 
@@ -155,7 +155,7 @@ def ik_jacobian_transpose(target_pos, thetas0, links, axes=None,
         thetas += dtheta
         
         # Clamp to limits
-        for i in range(5):
+        for i in range(len(thetas)):
              thetas[i] = max(limits_rad[i][0], min(limits_rad[i][1], thetas[i]))
              
     return False, thetas, f"Not converged after {max_iter} iters, err={err_norm:.6f}"
@@ -179,7 +179,8 @@ def inverse_kinematics(x, y, z, tool_angle_deg=0.0, gripper_angle_deg=0.0):
         get_segment_length(1), # L1
         get_segment_length(2), # L2
         get_segment_length(3), # L3
-        get_segment_length(4)  # L4
+        get_segment_length(4), # L4
+        get_segment_length(5)  # L5
     ]
     
     # Use Home as initial guess or last known? 
@@ -209,7 +210,8 @@ def inverse_kinematics(x, y, z, tool_angle_deg=0.0, gripper_angle_deg=0.0):
         res_deg[1],
         res_deg[2],
         res_deg[3],
-        res_deg[4]
+        res_deg[4],
+        res_deg[5]
     ]
 
 # ---------------------------

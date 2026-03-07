@@ -97,7 +97,7 @@ class AnimationWorker(QThread):
             self.msleep(30) # ~33 FPS
 
     def compute_matrices(self, angles_deg):
-        theta1, theta2, theta3, theta4, theta5 = [np.radians(a) for a in angles_deg]
+        theta1, theta2, theta3, theta4, theta5, theta6 = [np.radians(a) for a in angles_deg]
 
         # Transformations homogènes
         def rotz(t): c,s=np.cos(t),np.sin(t); return np.array([[c,-s,0,0],[s,c,0,0],[0,0,1,0],[0,0,0,1]],dtype=float)
@@ -125,6 +125,9 @@ class AnimationWorker(QThread):
         # Link 5 (Segment 4): Rotate Y (J5), Translate Z (L4)
         F5 = F4 @ roty(theta5) @ tz(L4)
 
+        # Link 6 (Segment 5): Rotate Y (J6), Translate Z (L5)
+        F6 = F5 @ roty(theta6) @ tz(L5)
+
         matrices = {
             'base': F0.T,      # OpenGL uses column-major usually, but setTransform might accept row-major numpy?
                                # PyQtGraph setTransform: "If a 4x4 array, it must be row-major."
@@ -137,7 +140,8 @@ class AnimationWorker(QThread):
             'segment2': F2,
             'segment3': F3,
             'segment4': F4,
-            'gripperInterface': F5, 
+            'segment5': F5,
+            'gripperInterface': F6, 
         }
 
         # Jaws
@@ -146,17 +150,17 @@ class AnimationWorker(QThread):
         T_off_L = np.eye(4)
         T_off_L[0,3] = 10.0
         T_off_L[1,3] = -jaw_offset
-        matrices['jaw_left'] = F5 @ T_off_L
+        matrices['jaw_left'] = F6 @ T_off_L
         
         # Jaw Right
         T_off_R = np.eye(4)
         T_off_R[0,3] = 10.0
         T_off_R[1,3] = jaw_offset
-        matrices['jaw_right'] = F5 @ T_off_R
+        matrices['jaw_right'] = F6 @ T_off_R
 
         # Joints markers positions
         joint_pts = [
-            F0[:3,3], F1[:3,3], F2[:3,3], F3[:3,3], F4[:3,3], F5[:3,3]
+            F0[:3,3], F1[:3,3], F2[:3,3], F3[:3,3], F4[:3,3], F5[:3,3], F6[:3,3]
         ]
 
         return {'matrices': matrices, 'joints': joint_pts}
@@ -172,7 +176,7 @@ class KAudaApp(QWidget):
         self.reader = None
 
         # animation angles
-        self.current_angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+        self.current_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.target_angles = list(self.current_angles)
 
         # store raw mesh data (vertex arrays & faces) for transforms
@@ -342,16 +346,22 @@ class KAudaApp(QWidget):
         grid_j.addWidget(val_j4, 3, 2)
 
         # Joint 5
-        self.slider_j5, lbl_j5, val_j5 = create_joint_slider("Gripper", 5, J5_MIN, J5_MAX)
+        self.slider_j5, lbl_j5, val_j5 = create_joint_slider("Gripper Orient", 5, J5_MIN, J5_MAX)
         grid_j.addWidget(lbl_j5, 4, 0)
         grid_j.addWidget(self.slider_j5, 4, 1)
         grid_j.addWidget(val_j5, 4, 2)
+
+        # Joint 6
+        self.slider_j6, lbl_j6, val_j6 = create_joint_slider("Segment 5", 6, J6_MIN, J6_MAX)
+        grid_j.addWidget(lbl_j6, 5, 0)
+        grid_j.addWidget(self.slider_j6, 5, 1)
+        grid_j.addWidget(val_j6, 5, 2)
 
         gb_joints.setLayout(grid_j)
         layout_joint.addWidget(gb_joints)
 
         # Connect joint sliders to preview update (so moving them previews the angular pose)
-        for s in [self.slider_j1, self.slider_j2, self.slider_j3, self.slider_j4, self.slider_j5]:
+        for s in [self.slider_j1, self.slider_j2, self.slider_j3, self.slider_j4, self.slider_j5, self.slider_j6]:
             s.valueChanged.connect(self.on_angular_joint_slider_changed)
 
         btn_goto = QPushButton("GOTO")
@@ -540,7 +550,7 @@ class KAudaApp(QWidget):
         if self.serial is None or not (hasattr(self.serial, 'is_open') and self.serial.is_open):
             self.log("Arduino non connecté. Usage: Connect.")
             return
-        home_angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+        home_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         if hasattr(self, 'worker'):
             self.worker.set_target(home_angles)
         self.send_angles_to_arduino(home_angles)
@@ -553,7 +563,8 @@ class KAudaApp(QWidget):
             self.slider_j2.value(),
             self.slider_j3.value(),
             self.slider_j4.value(),
-            self.slider_j5.value()
+            self.slider_j5.value(),
+            self.slider_j6.value()
         ]
         angles_rad = deg2rad(angles_deg)  # Convertir en radians pour FK
 
@@ -565,7 +576,7 @@ class KAudaApp(QWidget):
             self.worker.set_target(angles_deg, immediate=True)
 
         # FK pour récupérer la position finale du gripper
-        links = [LBASE, L1, L2, L3, L4]  
+        links = [LBASE, L1, L2, L3, L4, L5]  
         T, pts = forward_kinematics(angles_rad, links)
         x, y, z = pts[-1]  # Position finale du gripper
 
@@ -609,6 +620,7 @@ class KAudaApp(QWidget):
             self.slider_j3.value(),
             self.slider_j4.value(),
             self.slider_j5.value(),
+            self.slider_j6.value(),
         ]
 
         msg = format_goto_command(angles)
@@ -628,6 +640,7 @@ class KAudaApp(QWidget):
         self.slider_j3.setValue(home[2])
         self.slider_j4.setValue(home[3])
         self.slider_j5.setValue(home[4])
+        self.slider_j6.setValue(home[5])
 
         # 2) Mise à jour de la 3D
         # 2) Mise à jour de la 3D via worker

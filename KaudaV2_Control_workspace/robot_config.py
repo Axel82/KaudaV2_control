@@ -13,6 +13,7 @@ L1 = 80.0      # Segment 1 length
 L2 = 190.0      # Segment 2 length
 L3 = 140.0       # Segment 3 length
 L4 = 35.0       # Segment 4 length
+L5 = 25.0       # Segment 5 length
 RADIUS = 10.0   # Base radius for visualization cylinders
 
 # ============================================================================
@@ -35,9 +36,13 @@ J3_MAX = 150
 J4_MIN = -175
 J4_MAX = 175
 
-# Joint 5: Segment 4 (Rx)
+# Joint 5: Segment 4 (Ry)
 J5_MIN = -180 # Increased range for tool rotation
 J5_MAX = 180
+
+# Joint 6: Segment 5 (Ry)
+J6_MIN = -80
+J6_MAX = 80
 
 # ============================================================================
 # CARTESIAN WORKSPACE - Position limits (mm) and tool angles (degrees)
@@ -76,12 +81,12 @@ JAW_FORWARD_OFFSET = 10.0   # Forward offset from wrist end
 # ============================================================================
 
 # Rotation axes for each joint (for forward kinematics)
-# Format: ['axis1', 'axis2', 'axis3', 'axis4', 'axis5']
-JOINT_AXES = ['z', 'y', 'y', 'z', 'y']
+# Format: ['axis1', 'axis2', 'axis3', 'axis4', 'axis5', 'axis6']
+JOINT_AXES = ['z', 'y', 'y', 'z', 'y', 'y']
 
 # Home position (default safe position)
-# Format: [J1, J2, J3, J4, J5] in degrees
-HOME_ANGULAR_POSITION = [0, 0, 0, 0, 0]
+# Format: [J1, J2, J3, J4, J5, J6] in degrees
+HOME_ANGULAR_POSITION = [0, 0, 0, 0, 0, 0]
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -101,6 +106,7 @@ def get_joint_limits(joint_num):
         3: (J3_MIN, J3_MAX),
         4: (J4_MIN, J4_MAX),
         5: (J5_MIN, J5_MAX),
+        6: (J6_MIN, J6_MAX),
     }
     return limits.get(joint_num, (0, 0))
 
@@ -119,6 +125,7 @@ def get_segment_length(segment_num):
         2: L2,
         3: L3,
         4: L4,
+        5: L5,
     }
     return lengths.get(segment_num, 0.0)
 
